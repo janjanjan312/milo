@@ -3,6 +3,7 @@ import { useApp, MealItem, PlanTemplate } from '../context/AppContext';
 import { sendMessageToAI, ChatMessage, MealLogPayload, extractMealLogForRecord, InteractionScene, detectInteractionIntent } from '../services/ai';
 import { Send, Mic, Camera, X, Image as ImageIcon, ChefHat, Keyboard, Menu, Trash2 } from 'lucide-react';
 import { startRealtimeASR } from '../services/speechRecognition';
+import { startRecording, type PushToTalkController } from '../services/pushToTalk';
 import { motion, AnimatePresence } from 'motion/react';
 import CameraCaptureModal from '../components/CameraCaptureModal';
 import SaveMealPlanModal from '../components/SaveMealPlanModal';
@@ -21,6 +22,9 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isStartingListening, setIsStartingListening] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const pttRef = useRef<PushToTalkController | null>(null);
   const [inputMode, setInputMode] = useState<'voice' | 'text'>(() => {
     return (localStorage.getItem('diet_input_mode') as 'voice' | 'text') || 'voice';
   });
@@ -1173,6 +1177,36 @@ export default function Chat() {
     }
   };
 
+  const handlePttStart = async () => {
+    if (isRecording || isTranscribing || isLoading) return;
+    try {
+      const controller = await startRecording(language);
+      pttRef.current = controller;
+      setIsRecording(true);
+    } catch (e: any) {
+      if (e?.name === 'NotAllowedError') {
+        alert(language === 'zh' ? '麦克风权限被拒绝，请检查浏览器设置。' : 'Microphone access denied.');
+      }
+    }
+  };
+
+  const handlePttEnd = async () => {
+    if (!isRecording || !pttRef.current) return;
+    setIsRecording(false);
+    setIsTranscribing(true);
+    try {
+      const text = await pttRef.current.stop();
+      pttRef.current = null;
+      if (text.trim()) {
+        handleSend(text, true);
+      }
+    } catch (e: any) {
+      console.error('[PTT] transcription error:', e);
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
   const compressImage = (dataUrl: string, maxDim = 1024, quality = 0.7): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
@@ -1463,23 +1497,27 @@ export default function Chat() {
                 </button>
               ) : (
                 <button
-                  onClick={toggleListening}
-                  disabled={isLoading || isStartingListening}
-                  className={`flex-1 flex items-center py-3 px-4 rounded-2xl transition-all ${
-                    isListening
-                      ? 'bg-stone-100 text-stone-700 ring-1 ring-stone-300'
+                  onMouseDown={handlePttStart}
+                  onMouseUp={handlePttEnd}
+                  onMouseLeave={() => { if (isRecording) handlePttEnd(); }}
+                  onTouchStart={(e) => { e.preventDefault(); handlePttStart(); }}
+                  onTouchEnd={(e) => { e.preventDefault(); handlePttEnd(); }}
+                  disabled={isLoading || isTranscribing}
+                  className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-2xl transition-all select-none ${
+                    isRecording
+                      ? 'bg-red-50 text-red-600 ring-1 ring-red-300'
+                      : isTranscribing
+                      ? 'bg-stone-200 text-stone-500'
                       : 'bg-stone-100 text-stone-600 hover:bg-stone-200 active:bg-stone-200'
-                  } ${(isListening && (input || interimInput)) ? 'justify-start' : 'justify-center gap-2'} ${isStartingListening ? 'opacity-70' : ''}`}
+                  }`}
                 >
-                  {!(isListening && (input || interimInput)) && (
-                    <Mic size={20} className={isListening ? 'animate-pulse' : ''} />
-                  )}
-                  <span className="text-sm font-medium text-left">
-                    {isStartingListening
-                      ? (language === 'zh' ? '连接麦克风...' : 'Connecting mic...')
-                      : isListening
-                      ? ((input + interimInput) || (language === 'zh' ? '正在聆听...' : 'Listening...'))
-                      : (language === 'zh' ? '点击说话' : 'Tap to speak')}
+                  <Mic size={20} className={isRecording ? 'animate-pulse' : ''} />
+                  <span className="text-sm font-medium">
+                    {isRecording
+                      ? (language === 'zh' ? '松手发送' : 'Release to send')
+                      : isTranscribing
+                      ? (language === 'zh' ? '识别中...' : 'Transcribing...')
+                      : (language === 'zh' ? '按住说话' : 'Hold to talk')}
                   </span>
                 </button>
               )
