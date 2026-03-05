@@ -21,10 +21,13 @@ function isOriginAllowed(origin) {
 function transcribePCM(pcmBase64, language = 'zh') {
   return new Promise((resolve, reject) => {
     const texts = [];
+    const audioBytes = pcmBase64.length * 3 / 4;
+    const audioDurationSec = audioBytes / 2 / 16000;
+    const timeoutMs = Math.max(15000, audioDurationSec * 3000 + 10000);
     const ws = new WebSocket(ASR_WS_URL, {
       headers: { Authorization: `Bearer ${DASHSCOPE_API_KEY}`, 'OpenAI-Beta': 'realtime=v1' },
     });
-    const timeout = setTimeout(() => { ws.close(); reject(new Error('timeout')); }, 15000);
+    const timeout = setTimeout(() => { ws.close(); reject(new Error('timeout')); }, timeoutMs);
     ws.on('open', () => {
       ws.send(JSON.stringify({
         type: 'session.update',
@@ -37,15 +40,28 @@ function transcribePCM(pcmBase64, language = 'zh') {
       ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
       ws.send(JSON.stringify({ type: 'session.finish' }));
     });
+    let resolved = false;
     ws.on('message', (data) => {
       const msg = JSON.parse(data.toString());
       if (msg.type === 'conversation.item.input_audio_transcription.completed') {
         const t = msg.transcript || '';
         if (t) texts.push(t);
       }
+      if (msg.type === 'session.finished' && !resolved) {
+        resolved = true;
+        clearTimeout(timeout);
+        ws.close();
+        resolve(texts.join(''));
+      }
+      if (msg.type === 'error' && !resolved) {
+        resolved = true;
+        clearTimeout(timeout);
+        ws.close();
+        reject(new Error(msg.error?.message || 'DashScope error'));
+      }
     });
-    ws.on('close', () => { clearTimeout(timeout); resolve(texts.join('')); });
-    ws.on('error', (err) => { clearTimeout(timeout); reject(err); });
+    ws.on('close', () => { if (!resolved) { resolved = true; clearTimeout(timeout); resolve(texts.join('')); } });
+    ws.on('error', (err) => { if (!resolved) { resolved = true; clearTimeout(timeout); reject(err); } });
   });
 }
 
