@@ -67,6 +67,10 @@ export async function startRecording(language: 'zh' | 'en' = 'zh'): Promise<Push
         ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
       }
       pendingAudio.length = 0;
+      if (stopped && resolveStop) {
+        ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+        ws.send(JSON.stringify({ type: 'session.finish' }));
+      }
     }
 
     if (msg.type === 'conversation.item.input_audio_transcription.completed') {
@@ -121,8 +125,16 @@ export async function startRecording(language: 'zh' | 'en' = 'zh'): Promise<Push
 
       return new Promise<string>((resolve) => {
         resolveStop = resolve;
-        ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-        ws.send(JSON.stringify({ type: 'session.finish' }));
+
+        if (sessionReady) {
+          for (const b64 of pendingAudio) {
+            ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
+          }
+          pendingAudio.length = 0;
+          ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+          ws.send(JSON.stringify({ type: 'session.finish' }));
+        }
+        // else: session.updated handler will flush pending audio + send commit+finish
 
         setTimeout(() => {
           if (resolveStop) {
