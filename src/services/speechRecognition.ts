@@ -306,7 +306,7 @@ function startWebSocketASR(
                 if (ws.readyState === WebSocket.OPEN) ws.close();
                 onStatus('closed');
               }
-            }, 3000);
+            }, 5000);
           });
         },
         flush: () => {
