@@ -55,7 +55,10 @@ export async function startRecording(language: 'zh' | 'en' = 'zh'): Promise<Push
       }
       const base64 = btoa(parts.join(''));
 
-      const response = await fetch('/api/transcribe', {
+      const asrBaseUrl = import.meta.env.VITE_ASR_WS_URL?.replace(/^wss?:\/\//, 'https://') || '';
+      const transcribeUrl = asrBaseUrl ? `${asrBaseUrl}/transcribe` : '/api/transcribe';
+
+      const response = await fetch(transcribeUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ audio: base64, language }),

@@ -18,9 +18,67 @@ function isOriginAllowed(origin) {
   );
 }
 
-const server = createServer((_req, res) => {
+function transcribePCM(pcmBase64, language = 'zh') {
+  return new Promise((resolve, reject) => {
+    const texts = [];
+    const ws = new WebSocket(ASR_WS_URL, {
+      headers: { Authorization: `Bearer ${DASHSCOPE_API_KEY}`, 'OpenAI-Beta': 'realtime=v1' },
+    });
+    const timeout = setTimeout(() => { ws.close(); reject(new Error('timeout')); }, 15000);
+    ws.on('open', () => {
+      ws.send(JSON.stringify({
+        type: 'session.update',
+        session: { modalities: ['text'], input_audio_format: 'pcm', sample_rate: 16000, input_audio_transcription: { language }, turn_detection: null },
+      }));
+      const chunk = 64000;
+      for (let i = 0; i < pcmBase64.length; i += chunk) {
+        ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: pcmBase64.slice(i, i + chunk) }));
+      }
+      ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+      ws.send(JSON.stringify({ type: 'session.finish' }));
+    });
+    ws.on('message', (data) => {
+      const msg = JSON.parse(data.toString());
+      if (msg.type === 'conversation.item.input_audio_transcription.completed') {
+        const t = msg.transcript || '';
+        if (t) texts.push(t);
+      }
+    });
+    ws.on('close', () => { clearTimeout(timeout); resolve(texts.join('')); });
+    ws.on('error', (err) => { clearTimeout(timeout); reject(err); });
+  });
+}
+
+const server = createServer(async (req, res) => {
+  const origin = req.headers.origin || '';
+  res.setHeader('Access-Control-Allow-Origin', isOriginAllowed(origin) ? origin : '');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
+  if (req.method === 'POST' && req.url === '/transcribe') {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', async () => {
+      try {
+        const { audio, language = 'zh' } = JSON.parse(body);
+        if (!audio) { res.writeHead(400); res.end(JSON.stringify({ error: 'no audio' })); return; }
+        const text = await transcribePCM(audio, language);
+        console.log(`[transcribe] result: "${text.slice(-40)}"`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ text }));
+      } catch (e) {
+        console.error('[transcribe] error:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('ASR WebSocket proxy is running');
+  res.end('ASR proxy is running');
 });
 
 const wss = new WebSocketServer({ noServer: true });
