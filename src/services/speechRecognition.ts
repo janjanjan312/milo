@@ -125,10 +125,13 @@ function startBrowserASR(
 }
 
 // ---------------------------------------------------------------------------
-// WebSocket ASR: browser → Vite proxy (/ws/asr) → DashScope realtime API
-// Real-time streaming with full context. Works in all browsers & PWA.
+// WebSocket ASR: browser → proxy → DashScope realtime API
+// Production: connects to Railway proxy via VITE_ASR_WS_URL
+// Development: connects to Vite dev server proxy at /ws/asr
 // ---------------------------------------------------------------------------
 function getWsUrl(): string {
+  const envUrl = import.meta.env.VITE_ASR_WS_URL;
+  if (envUrl) return envUrl;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   return `${proto}://${location.host}/ws/asr`;
 }
