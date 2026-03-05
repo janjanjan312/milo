@@ -119,14 +119,14 @@ export async function startRecording(language: 'zh' | 'en' = 'zh'): Promise<Push
     stop: () => {
       cleanup();
 
-      if (ws.readyState !== WebSocket.OPEN) {
+      if (ws.readyState >= WebSocket.CLOSING) {
         return Promise.resolve(accumulated);
       }
 
       return new Promise<string>((resolve) => {
         resolveStop = resolve;
 
-        if (sessionReady) {
+        if (sessionReady && ws.readyState === WebSocket.OPEN) {
           for (const b64 of pendingAudio) {
             ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
           }
@@ -134,7 +134,8 @@ export async function startRecording(language: 'zh' | 'en' = 'zh'): Promise<Push
           ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
           ws.send(JSON.stringify({ type: 'session.finish' }));
         }
-        // else: session.updated handler will flush pending audio + send commit+finish
+        // else: ws still CONNECTING or session not ready yet —
+        // session.updated handler will flush pending audio + send commit+finish
 
         setTimeout(() => {
           if (resolveStop) {
@@ -142,7 +143,7 @@ export async function startRecording(language: 'zh' | 'en' = 'zh'): Promise<Push
             if (ws.readyState <= WebSocket.OPEN) ws.close();
             resolve(accumulated);
           }
-        }, 5000);
+        }, 8000);
       });
     },
     cancel: () => {

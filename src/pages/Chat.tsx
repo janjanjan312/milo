@@ -25,6 +25,8 @@ export default function Chat() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const pttRef = useRef<PushToTalkController | null>(null);
+  const pttPromiseRef = useRef<Promise<PushToTalkController> | null>(null);
+  const recordingRef = useRef(false);
   const [inputMode, setInputMode] = useState<'voice' | 'text'>(() => {
     return (localStorage.getItem('diet_input_mode') as 'voice' | 'text') || 'voice';
   });
@@ -1178,12 +1180,18 @@ export default function Chat() {
   };
 
   const handlePttStart = async () => {
-    if (isRecording || isTranscribing || isLoading) return;
+    if (recordingRef.current || isTranscribing || isLoading) return;
+    recordingRef.current = true;
+    setIsRecording(true);
     try {
-      const controller = await startRecording(language);
+      const promise = startRecording(language);
+      pttPromiseRef.current = promise;
+      const controller = await promise;
       pttRef.current = controller;
-      setIsRecording(true);
     } catch (e: any) {
+      recordingRef.current = false;
+      setIsRecording(false);
+      pttPromiseRef.current = null;
       if (e?.name === 'NotAllowedError') {
         alert(language === 'zh' ? '麦克风权限被拒绝，请检查浏览器设置。' : 'Microphone access denied.');
       }
@@ -1191,12 +1199,21 @@ export default function Chat() {
   };
 
   const handlePttEnd = async () => {
-    if (!isRecording || !pttRef.current) return;
+    if (!recordingRef.current) return;
+    recordingRef.current = false;
     setIsRecording(false);
     setIsTranscribing(true);
     try {
+      if (!pttRef.current && pttPromiseRef.current) {
+        pttRef.current = await pttPromiseRef.current;
+      }
+      if (!pttRef.current) {
+        setIsTranscribing(false);
+        return;
+      }
       const text = await pttRef.current.stop();
       pttRef.current = null;
+      pttPromiseRef.current = null;
       if (text.trim()) {
         handleSend(text, true);
       }
