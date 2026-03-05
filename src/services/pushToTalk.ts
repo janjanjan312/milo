@@ -44,7 +44,11 @@ export async function startRecording(language: 'zh' | 'en' = 'zh'): Promise<Push
   let accumulated = '';
   let resolveStop: ((text: string) => void) | null = null;
 
+  const t0 = Date.now();
+  const log = (...args: any[]) => console.log(`[PTT +${((Date.now() - t0) / 1000).toFixed(1)}s]`, ...args);
+
   ws.onopen = () => {
+    log('ws open, sending session.update');
     ws.send(JSON.stringify({
       type: 'session.update',
       session: {
@@ -62,12 +66,14 @@ export async function startRecording(language: 'zh' | 'en' = 'zh'): Promise<Push
     try { msg = JSON.parse(evt.data); } catch { return; }
 
     if (msg.type === 'session.updated') {
+      log('session ready, pending audio chunks:', pendingAudio.length);
       sessionReady = true;
       for (const b64 of pendingAudio) {
         ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
       }
       pendingAudio.length = 0;
       if (stopped && resolveStop) {
+        log('stop() was called before session ready, sending commit+finish now');
         ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
         ws.send(JSON.stringify({ type: 'session.finish' }));
       }
@@ -76,19 +82,27 @@ export async function startRecording(language: 'zh' | 'en' = 'zh'): Promise<Push
     if (msg.type === 'conversation.item.input_audio_transcription.completed') {
       const t = (msg.transcript || '').trim();
       if (t) accumulated += t;
+      log('completed:', accumulated.slice(-40));
     }
 
     if (msg.type === 'session.finished' && resolveStop) {
+      log('session.finished, resolving with', accumulated.length, 'chars');
       const resolve = resolveStop;
       resolveStop = null;
       ws.close();
       resolve(accumulated);
     }
+
+    if (msg.type === 'error') {
+      log('DashScope error:', msg.error);
+    }
   };
 
-  ws.onerror = () => {};
-  ws.onclose = () => {
+  ws.onerror = (e) => { log('ws error', e); };
+  ws.onclose = (e) => {
+    log('ws closed, code:', e.code, 'reason:', e.reason);
     if (resolveStop) {
+      log('resolving on close with', accumulated.length, 'chars');
       const resolve = resolveStop;
       resolveStop = null;
       resolve(accumulated);
@@ -118,8 +132,10 @@ export async function startRecording(language: 'zh' | 'en' = 'zh'): Promise<Push
   return {
     stop: () => {
       cleanup();
+      log('stop() called, wsState:', ws.readyState, 'sessionReady:', sessionReady, 'pending:', pendingAudio.length);
 
       if (ws.readyState >= WebSocket.CLOSING) {
+        log('ws already closing/closed, returning accumulated:', accumulated.length, 'chars');
         return Promise.resolve(accumulated);
       }
 
@@ -131,14 +147,16 @@ export async function startRecording(language: 'zh' | 'en' = 'zh'): Promise<Push
             ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
           }
           pendingAudio.length = 0;
+          log('sending commit+finish');
           ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
           ws.send(JSON.stringify({ type: 'session.finish' }));
+        } else {
+          log('waiting for session to be ready before commit+finish');
         }
-        // else: ws still CONNECTING or session not ready yet —
-        // session.updated handler will flush pending audio + send commit+finish
 
         setTimeout(() => {
           if (resolveStop) {
+            log('timeout! resolving with', accumulated.length, 'chars');
             resolveStop = null;
             if (ws.readyState <= WebSocket.OPEN) ws.close();
             resolve(accumulated);
