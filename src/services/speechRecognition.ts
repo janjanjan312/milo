@@ -368,7 +368,7 @@ function startWebSocketASR(
     function startAudioCapture() {
       audioContext = new AudioContext({ sampleRate: 16000 });
       const source = audioContext.createMediaStreamSource(stream!);
-      processor = audioContext.createScriptProcessor(4096, 1, 1);
+      processor = audioContext.createScriptProcessor(2048, 1, 1);
 
       processor.onaudioprocess = (e) => {
         if (stopped) return;
