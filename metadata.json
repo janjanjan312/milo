@@ -1,0 +1,8 @@
+{
+  "name": "Diet Assistant",
+  "description": "A smart nutrition tracker and diet assistant powered by AI.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile AI Advice Card Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f4;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            margin-top: 0;
+            color: #292524;
+        }
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin: 16px 0;
+            font-size: 14px;
+        }
+        .status.success {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .status.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .status.info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        button {
+            background: #292524;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 8px 8px 8px 0;
+        }
+        button:hover {
+            background: #57534e;
+        }
+        pre {
+            background: #fafaf9;
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 13px;
+            border: 1px solid #e7e5e4;
+        }
+        .advice-card {
+            background: white;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid #e7e5e4;
+            margin: 16px 0;
+        }
+        .advice-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        .advice-content {
+            font-size: 14px;
+            color: #57534e;
+            line-height: 1.6;
+        }
+        .lightbulb {
+            color: #f59e0b;
+        }
+        iframe {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #e7e5e4;
+            border-radius: 12px;
+            margin-top: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 AI优化建议卡片测试</h1>
+        
+        <div id="status"></div>
+        
+        <div>
+            <button onclick="checkAdvice()">检查当前建议</button>
+            <button onclick="injectAdvice()">注入测试建议</button>
+            <button onclick="clearAdvice()">清除建议</button>
+            <button onclick="openProfile()">打开Profile页面</button>
+        </div>
+        
+        <div id="result"></div>
+        
+        <h2>当前localStorage状态</h2>
+        <pre id="localStorage"></pre>
+        
+        <h2>Profile页面预览</h2>
+        <iframe id="profileFrame" src="http://localhost:3000/#/profile"></iframe>
+    </div>
+
+    <script>
+        const sampleAdvice = `信息收集完毕啦！根据你的饮食、作息和压力情况,我梳理了以下几点优化建议:
+
+1. 起床后尽快补充蛋白质(如鸡蛋或豆浆),避免血糖过低导致下午想吃甜腻食物。
+2. 下午饿了或压力大时,先喝一杯水确认是口渴还是嘴馋,尽量把牛奶茶换成无糖茶饮或少量水果。
+3. 建议尽量在午夜12点后不再进食,减轻肠胃负担也能减少夜间不必要的热量。
+4. 晚间的饼干薯片换成原味坚果、低糖酸奶或黄瓜,既能解馋又不容易发胖。
+5. 赶作业时若感到焦虑想吃的冲动,站起来伸展一下身体,换个环境走走神。
+
+你要不要我根据这些建议帮你设计一份具体的一日食谱?`;
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+        }
+
+        function updateLocalStorageDisplay() {
+            const lsDiv = document.getElementById('localStorage');
+            const advice = localStorage.getItem('savedAdvice');
+            const chatMessages = localStorage.getItem('chatMessages');
+            
+            let display = {};
+            if (advice) {
+                try {
+                    display.savedAdvice = JSON.parse(advice);
+                } catch {
+                    display.savedAdvice = advice;
+                }
+            }
+            
+            if (chatMessages) {
+                try {
+                    const messages = JSON.parse(chatMessages);
+                    display.chatMessagesCount = messages.length;
+                    
+                    // Find advice messages
+                    const adviceMessages = messages.filter(msg => {
+                        if (msg.role !== 'model') return false;
+                        const text = msg.text || '';
+                        return /[1-9][\.\)、]/.test(text) && (text.includes('建议') || text.includes('优化') || text.includes('调整'));
+                    });
+                    
+                    if (adviceMessages.length > 0) {
+                        display.foundAdviceInChat = adviceMessages.map(m => m.text.substring(0, 150) + '...');
+                    }
+                } catch {
+                    display.chatMessages = 'Error parsing';
+                }
+            }
+            
+            lsDiv.textContent = JSON.stringify(display, null, 2);
+        }
+
+        function checkAdvice() {
+            const advice = localStorage.getItem('savedAdvice');
+            const resultDiv = document.getElementById('result');
+            
+            if (advice) {
+                try {
+                    const parsed = JSON.parse(advice);
+                    showStatus('✓ 找到保存的AI建议', 'success');
+                    resultDiv.innerHTML = `
+                        <div class="advice-card">
+                            <div class="advice-header">
+                                <span class="lightbulb">💡</span>
+                                <span>AI 优化建议</span>
+                            </div>
+                            <div class="advice-content">${parsed.replace(/\n/g, '<br>')}</div>
+                        </div>
+                    `;
+                } catch {
+                    showStatus('✓ 找到建议但格式不正确', 'error');
+                    resultDiv.innerHTML = `<pre>${advice}</pre>`;
+                }
+            } else {
+                showStatus('✗ 未找到保存的建议', 'error');
+                resultDiv.innerHTML = '<p>localStorage中没有savedAdvice数据</p>';
+            }
+            
+            updateLocalStorageDisplay();
+            reloadFrame();
+        }
+
+        function injectAdvice() {
+            localStorage.setItem('savedAdvice', JSON.stringify(sampleAdvice));
+            showStatus('✓ 成功注入测试建议数据', 'success');
+            checkAdvice();
+        }
+
+        function clearAdvice() {
+            localStorage.removeItem('savedAdvice');
+            showStatus('✓ 已清除建议数据', 'success');
+            document.getElementById('result').innerHTML = '';
+            updateLocalStorageDisplay();
+            reloadFrame();
+        }
+
+        function openProfile() {
+            window.open('http://localhost:3000/#/profile', '_blank');
+        }
+
+        function reloadFrame() {
+            const frame = document.getElementById('profileFrame');
+            frame.src = frame.src;
+        }
+
+        // Initial check
+        window.addEventListener('load', () => {
+            checkAdvice();
+        });
+
+        // Auto-refresh frame every 5 seconds to see changes
+        setInterval(() => {
+            updateLocalStorageDisplay();
+        }, 5000);
+    </script>
+</body>
+</html>
