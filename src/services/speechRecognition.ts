@@ -6,10 +6,8 @@ interface RealtimeSession {
   flush: () => Promise<string>;
 }
 
-// TODO: re-enable after testing WebSocket ASR
-const BrowserSpeechRecognition: any = false
-  ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
-  : null;
+const BrowserSpeechRecognition: any =
+  (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || null;
 
 export async function startRealtimeASR(
   onTranscript: TranscriptCallback,

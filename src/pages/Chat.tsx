@@ -1141,7 +1141,7 @@ export default function Chat() {
           if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
           silenceTimerRef.current = setTimeout(() => {
             handleSendRef.current();
-          }, 2500);
+          }, 1500);
         },
         (status) => {
           if (status === 'connected') {
