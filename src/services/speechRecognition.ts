@@ -14,7 +14,7 @@ export async function startRealtimeASR(
   onStatus: StatusCallback,
   language: 'zh' | 'en' = 'zh',
 ): Promise<RealtimeSession> {
-  const forceWs = new URLSearchParams(location.search).has('asr');
+  const forceWs = sessionStorage.getItem('forceWsAsr') === '1';
   if (BrowserSpeechRecognition && !forceWs) {
     try {
       return await startBrowserASR(onTranscript, onStatus, language);
