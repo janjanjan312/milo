@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useApp, MealItem, PlanTemplate } from '../context/AppContext';
 import { sendMessageToAI, ChatMessage, MealLogPayload, extractMealLogForRecord, InteractionScene, detectInteractionIntent } from '../services/ai';
-import { Send, Mic, Camera, X, Image as ImageIcon, ChefHat, Trash2, Keyboard } from 'lucide-react';
+import { Send, Mic, Camera, X, Image as ImageIcon, ChefHat, Keyboard, Menu, Trash2 } from 'lucide-react';
 import { startRealtimeASR } from '../services/speechRecognition';
 import { motion, AnimatePresence } from 'motion/react';
 import CameraCaptureModal from '../components/CameraCaptureModal';
@@ -39,6 +39,7 @@ export default function Chat() {
   const startedModeRef = useRef<InteractionScene | null>(null);
   const showQuickModeAfterReplyRef = useRef(false);
   const [showQuickModeButtons, setShowQuickModeButtons] = useState(false);
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   
   // Batching Refs
   const pendingMessagesRef = useRef<string[]>([]);
@@ -1216,19 +1217,31 @@ export default function Chat() {
     setShowCameraMenu(false);
   };
 
-  const [isCleared, setIsCleared] = useState(false);
+  // Auto-refresh chat daily
+  useEffect(() => {
+    const today = new Date().toDateString();
+    const lastChatDate = localStorage.getItem('diet_last_chat_date');
+    if (lastChatDate && lastChatDate !== today && messages.length > 1) {
+      clearChat();
+    }
+    localStorage.setItem('diet_last_chat_date', today);
+  }, []);
 
   const getInitialGreeting = () => {
     if (language === 'zh') {
-      return '你好呀，我是麦粒！要帮你把三餐安排得更合理，先了解下你的作息：你一般几点起床、几点吃饭？';
+      return '你好呀，我是麦粒！我可以帮你合理搭配每一餐，让营养摄入更均衡。要来定制饮食计划，还是先记一餐试试？';
     }
-    return "Hey, I'm Milo! To help you eat smarter, let me learn about your routine first — what time do you usually wake up and have your meals?";
+    return "Hey, I'm Milo! I can help you balance every meal for better nutrition. Want to create a diet plan, or log a meal first?";
   };
 
   const clearChat = () => {
+    const suggestions = language === 'zh'
+      ? ['生成计划', '饮食记录', '喝水打卡']
+      : ['Generate optimized plan', 'Log meals by photo/text', 'Daily/weekly record analysis'];
     const initialMessage: ChatMessage = { 
       role: 'model', 
-      text: getInitialGreeting()
+      text: getInitialGreeting(),
+      suggestions,
     };
     setMessages([initialMessage]);
     forcedSceneRef.current = null;
@@ -1236,8 +1249,6 @@ export default function Chat() {
     setShowQuickModeButtons(false);
     setLastSavedPlanId(null);
     lastSavedPlanHashRef.current = null;
-    setIsCleared(true);
-    setTimeout(() => setIsCleared(false), 2000);
   };
 
   const modeEntryButtons =
@@ -1247,27 +1258,42 @@ export default function Chat() {
 
   return (
     <div className="flex flex-col h-full bg-stone-50 relative">
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 pt-14 space-y-4" onClick={() => setShowCameraMenu(false)}>
-        <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
-          {isCleared && (
-            <motion.span
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0 }}
-              className="text-xs text-stone-600 font-medium"
+      {/* Header */}
+      <div className="absolute top-0 left-0 right-0 z-20 bg-white/95 backdrop-blur-sm border-b border-stone-100" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+        <div className="flex items-center justify-between px-4 h-12">
+          <div className="relative">
+            <button
+              onClick={() => setShowHeaderMenu(!showHeaderMenu)}
+              className="p-1.5 text-stone-600 hover:text-stone-900 transition-colors rounded-lg hover:bg-stone-100"
             >
-              Cleared!
-            </motion.span>
-          )}
-          <button
-            onClick={clearChat}
-            className="p-2 text-stone-400 hover:text-red-500 transition-colors rounded-full hover:bg-red-50 bg-white/90 border border-stone-200 shadow-sm"
-            title="Clear Chat"
-          >
-            <Trash2 size={18} />
-          </button>
+              <Menu size={20} />
+            </button>
+            <AnimatePresence>
+              {showHeaderMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute left-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-stone-200 py-1 min-w-[160px]"
+                >
+                  <button
+                    onClick={() => { clearChat(); setShowHeaderMenu(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-stone-600 hover:bg-stone-50 transition-colors"
+                  >
+                    <Trash2 size={16} className="text-stone-400" />
+                    {language === 'zh' ? '清除对话' : 'Clear Chat'}
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          <div className="w-8" />
         </div>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 pt-14 space-y-4" onClick={() => { setShowCameraMenu(false); setShowHeaderMenu(false); }}>
         {messages.map((msg, idx) => (
           <div key={idx} className="flex flex-col">
             <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>

@@ -14,7 +14,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         {children}
       </main>
       
-      <nav className="bg-white border-t border-stone-200 px-6 py-3 flex justify-around items-center z-50 safe-area-bottom">
+      <nav className="bg-white border-t border-stone-200 px-6 pt-3 flex justify-around items-center z-50" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}>
         <NavItem to="/chat" icon={<MessageSquare size={24} />} label={t.nav.chat} />
         <NavItem to="/record" icon={<ClipboardList size={24} />} label={t.nav.record} />
         <NavItem to="/me" icon={<User size={24} />} label={t.nav.me} />
