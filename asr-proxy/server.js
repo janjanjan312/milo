@@ -1,7 +1,7 @@
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 
-const PORT = process.env.PORT || 8080;
+const PORT = 9000;
 const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || '';
 const ASR_MODEL = process.env.ASR_MODEL || 'qwen3-asr-flash-realtime';
 const ASR_WS_URL = `wss://dashscope.aliyuncs.com/api-ws/v1/realtime?model=${ASR_MODEL}`;
@@ -16,6 +16,14 @@ function isOriginAllowed(origin) {
   return ALLOWED_ORIGINS.some(
     (ao) => origin === ao || origin.endsWith(ao.replace(/^\*/, '')),
   );
+}
+
+function corsHeaders(origin) {
+  return {
+    'Access-Control-Allow-Origin': isOriginAllowed(origin) ? origin : '',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
 }
 
 function transcribePCM(pcmBase64, language = 'zh') {
@@ -67,9 +75,8 @@ function transcribePCM(pcmBase64, language = 'zh') {
 
 const server = createServer(async (req, res) => {
   const origin = req.headers.origin || '';
-  res.setHeader('Access-Control-Allow-Origin', isOriginAllowed(origin) ? origin : '');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  const cors = corsHeaders(origin);
+  for (const [k, v] of Object.entries(cors)) res.setHeader(k, v);
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
@@ -176,7 +183,7 @@ server.on('upgrade', (req, socket, head) => {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`ASR proxy listening on port ${PORT}`);
   console.log(`API key: ${DASHSCOPE_API_KEY ? 'loaded' : 'MISSING'}`);
   console.log(`Model: ${ASR_MODEL}`);

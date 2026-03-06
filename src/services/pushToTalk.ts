@@ -12,6 +12,30 @@ function getWsUrl(): string {
   return `${proto}://${location.host}/ws/asr`;
 }
 
+function getHttpTranscribeUrl(): string {
+  const wsUrl = import.meta.env.VITE_ASR_WS_URL;
+  if (wsUrl) {
+    return wsUrl.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:') + '/transcribe';
+  }
+  return `${location.origin}/api/transcribe`;
+}
+
+async function httpTranscribe(allAudio: string[], language: string): Promise<string> {
+  const combined = allAudio.join('');
+  if (!combined) return '';
+  const url = getHttpTranscribeUrl();
+  console.log(`[PTT-HTTP] posting ${combined.length} base64 chars to ${url}`);
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ audio: combined, language }),
+  });
+  if (!res.ok) throw new Error(`HTTP transcribe failed: ${res.status}`);
+  const data = await res.json();
+  console.log(`[PTT-HTTP] result: "${(data.text || '').slice(-40)}"`);
+  return data.text || '';
+}
+
 function encodeFloat32ToBase64(float32: Float32Array): string {
   const int16 = new Int16Array(float32.length);
   for (let i = 0; i < float32.length; i++) {
@@ -43,8 +67,10 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
   let stopped = false;
   let sessionReady = false;
   const pendingAudio: string[] = [];
+  const allAudio: string[] = [];
   let accumulated = '';
   let resolveStop: ((text: string) => void) | null = null;
+  let wsFailed = false;
 
   const t0 = Date.now();
   const log = (...args: any[]) => console.log(`[PTT +${((Date.now() - t0) / 1000).toFixed(1)}s]`, ...args);
@@ -100,7 +126,7 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
     }
   };
 
-  ws.onerror = (e) => { log('ws error', e); };
+  ws.onerror = (e) => { log('ws error', e); wsFailed = true; };
   ws.onclose = (e) => {
     log('ws closed, code:', e.code, 'reason:', e.reason);
     if (resolveStop) {
@@ -115,6 +141,7 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
     if (stopped) return;
     const channelData = e.inputBuffer.getChannelData(0);
     const b64 = encodeFloat32ToBase64(channelData);
+    allAudio.push(b64);
     if (sessionReady && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
     } else {
@@ -142,11 +169,22 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
   return {
     stop: () => {
       cleanup();
-      log('stop() called, wsState:', ws.readyState, 'sessionReady:', sessionReady, 'pending:', pendingAudio.length);
+      log('stop() called, wsState:', ws.readyState, 'sessionReady:', sessionReady, 'pending:', pendingAudio.length, 'wsFailed:', wsFailed);
 
-      if (ws.readyState >= WebSocket.CLOSING) {
-        log('ws already closing/closed, returning accumulated:', accumulated.length, 'chars');
-        return Promise.resolve(accumulated);
+      const fallbackToHttp = async (): Promise<string> => {
+        log('falling back to HTTP transcribe with', allAudio.length, 'chunks');
+        if (ws.readyState <= WebSocket.OPEN) ws.close();
+        try {
+          return await httpTranscribe(allAudio, language);
+        } catch (e: any) {
+          log('HTTP fallback also failed:', e.message);
+          return accumulated;
+        }
+      };
+
+      if (wsFailed || ws.readyState >= WebSocket.CLOSING) {
+        log('ws unavailable, using HTTP fallback');
+        return fallbackToHttp();
       }
 
       return new Promise<string>((resolve) => {
@@ -164,14 +202,13 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
           log('waiting for session to be ready before commit+finish');
         }
 
-        setTimeout(() => {
+        setTimeout(async () => {
           if (resolveStop) {
-            log('timeout! resolving with', accumulated.length, 'chars');
+            log('ws timeout, trying HTTP fallback');
             resolveStop = null;
-            if (ws.readyState <= WebSocket.OPEN) ws.close();
-            resolve(accumulated);
+            resolve(await fallbackToHttp());
           }
-        }, 8000);
+        }, 6000);
       });
     },
     cancel: () => {
