@@ -142,11 +142,7 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
 
     if (msg.type === 'session.finished' && resolveStop) {
       log('session.finished, resolving with', accumulated.length, 'chars');
-      if (wsTimeoutId) { clearTimeout(wsTimeoutId); wsTimeoutId = null; }
-      const resolve = resolveStop;
-      resolveStop = null;
-      ws.close();
-      resolve(accumulated);
+      resolveStop(accumulated);
     }
 
     if (msg.type === 'error') {
@@ -157,11 +153,9 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
   ws.onerror = (e) => { log('ws error', e); wsFailed = true; };
   ws.onclose = (e) => {
     log('ws closed, code:', e.code, 'reason:', e.reason);
-    if (resolveStop) {
-      log('resolving on close with', accumulated.length, 'chars');
-      const resolve = resolveStop;
-      resolveStop = null;
-      resolve(accumulated);
+    if (resolveStop && accumulated) {
+      log('ws closed with partial result, resolving with', accumulated.length, 'chars');
+      resolveStop(accumulated);
     }
   };
 
@@ -217,23 +211,37 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
       }
 
       return new Promise<string>((resolve) => {
-        resolveStop = resolve;
+        let settled = false;
+        const settle = (text: string, via: string) => {
+          if (settled) return;
+          settled = true;
+          resolveStop = null;
+          if (wsTimeoutId) { clearTimeout(wsTimeoutId); wsTimeoutId = null; }
+          log(`resolved via ${via}: "${text.slice(-40)}" (${text.length} chars)`);
+          if (ws.readyState <= WebSocket.OPEN) ws.close();
+          resolve(text);
+        };
+
+        resolveStop = (text: string) => settle(text, 'WS');
 
         for (const b64 of pendingAudio) {
           ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
         }
         pendingAudio.length = 0;
-        log('sending commit+finish');
+        log('sending commit+finish, racing WS vs HTTP (800ms grace)');
         ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
         ws.send(JSON.stringify({ type: 'session.finish' }));
 
-        wsTimeoutId = setTimeout(async () => {
-          if (resolveStop) {
-            log('ws timeout, trying HTTP fallback');
-            resolveStop = null;
-            resolve(await fallbackToHttp());
-          }
-        }, 5000);
+        wsTimeoutId = setTimeout(() => {
+          if (settled) return;
+          log('WS grace period elapsed, firing HTTP in parallel');
+          httpTranscribe(pcmChunks, language, log)
+            .then((text) => settle(text, 'HTTP'))
+            .catch((e) => {
+              log('HTTP fallback failed:', e.message);
+              if (!settled) settle(accumulated, 'HTTP-error');
+            });
+        }, 800);
       });
     },
     cancel: () => {
