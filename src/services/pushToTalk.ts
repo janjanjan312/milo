@@ -205,6 +205,17 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
 
         resolveStop = (text: string) => settle(text, 'WS');
 
+        const fireHttp = () => {
+          if (settled) return;
+          log('firing HTTP');
+          httpTranscribe(pcmChunks, language, log)
+            .then((text) => settle(text, 'HTTP'))
+            .catch((e) => {
+              log('HTTP failed:', e.message);
+              if (!settled) settle(accumulated, 'HTTP-error');
+            });
+        };
+
         if (sessionReady && ws.readyState === WebSocket.OPEN) {
           for (const b64 of pendingAudio) {
             ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
@@ -212,18 +223,12 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
           pendingAudio.length = 0;
           ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
           ws.send(JSON.stringify({ type: 'session.finish' }));
-          log('WS commit+finish sent');
+          log('WS commit+finish sent, HTTP fires in 500ms if no WS response');
+          setTimeout(fireHttp, 500);
         } else {
-          log('WS not ready, skipping commit');
+          log('WS not ready, firing HTTP immediately');
+          fireHttp();
         }
-
-        log('firing HTTP in parallel');
-        httpTranscribe(pcmChunks, language, log)
-          .then((text) => settle(text, 'HTTP'))
-          .catch((e) => {
-            log('HTTP failed:', e.message);
-            if (!settled) settle(accumulated, 'HTTP-error');
-          });
       });
     },
     cancel: () => {
