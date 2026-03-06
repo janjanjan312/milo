@@ -99,6 +99,7 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
   let accumulated = '';
   let resolveStop: ((text: string) => void) | null = null;
   let wsFailed = false;
+  let wsTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   const t0 = Date.now();
   const log = (...args: any[]) => console.log(`[PTT +${((Date.now() - t0) / 1000).toFixed(1)}s]`, ...args);
@@ -132,6 +133,21 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
         log('stop() was called before session ready, sending commit+finish now');
         ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
         ws.send(JSON.stringify({ type: 'session.finish' }));
+        if (wsTimeoutId) clearTimeout(wsTimeoutId);
+        wsTimeoutId = setTimeout(async () => {
+          if (resolveStop) {
+            log('ws timeout (post-session-ready), trying HTTP fallback');
+            const resolve = resolveStop;
+            resolveStop = null;
+            if (ws.readyState <= WebSocket.OPEN) ws.close();
+            try {
+              resolve(await httpTranscribe(pcmChunks, language, log));
+            } catch (e: any) {
+              log('HTTP fallback also failed:', e.message);
+              resolve(accumulated);
+            }
+          }
+        }, 5000);
       }
     }
 
@@ -143,6 +159,7 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
 
     if (msg.type === 'session.finished' && resolveStop) {
       log('session.finished, resolving with', accumulated.length, 'chars');
+      if (wsTimeoutId) { clearTimeout(wsTimeoutId); wsTimeoutId = null; }
       const resolve = resolveStop;
       resolveStop = null;
       ws.close();
@@ -230,13 +247,13 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
           log('waiting for session to be ready before commit+finish');
         }
 
-        setTimeout(async () => {
+        wsTimeoutId = setTimeout(async () => {
           if (resolveStop) {
             log('ws timeout, trying HTTP fallback');
             resolveStop = null;
             resolve(await fallbackToHttp());
           }
-        }, 3000);
+        }, 8000);
       });
     },
     cancel: () => {
