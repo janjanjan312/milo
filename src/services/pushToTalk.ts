@@ -13,13 +13,16 @@ function getHttpTranscribeUrl(): string {
   return `${location.origin}/api/transcribe`;
 }
 
-function encodeFloat32ToBase64(float32: Float32Array): string {
+function float32ToInt16(float32: Float32Array): Int16Array {
   const int16 = new Int16Array(float32.length);
   for (let i = 0; i < float32.length; i++) {
     const s = Math.max(-1, Math.min(1, float32[i]));
     int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
   }
-  const bytes = new Uint8Array(int16.buffer, int16.byteOffset, int16.byteLength);
+  return int16;
+}
+
+function encodeToBase64(bytes: Uint8Array): string {
   const chunkSize = 0x8000;
   const parts: string[] = [];
   for (let i = 0; i < bytes.length; i += chunkSize) {
@@ -41,7 +44,7 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
   const processor = audioContext.createScriptProcessor(2048, 1, 1);
 
   let stopped = false;
-  const allAudio: string[] = [];
+  const pcmChunks: Int16Array[] = [];
 
   const t0 = Date.now();
   const log = (...args: any[]) => console.log(`[PTT +${((Date.now() - t0) / 1000).toFixed(1)}s]`, ...args);
@@ -49,7 +52,7 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
   processor.onaudioprocess = (e) => {
     if (stopped) return;
     const channelData = e.inputBuffer.getChannelData(0);
-    allAudio.push(encodeFloat32ToBase64(channelData));
+    pcmChunks.push(float32ToInt16(channelData));
     if (onAudioLevel) {
       let sum = 0;
       for (let i = 0; i < channelData.length; i++) {
@@ -72,13 +75,21 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
   return {
     stop: async () => {
       cleanup();
-      const combined = allAudio.join('');
-      log('stop() called, audio chunks:', allAudio.length, 'total base64 chars:', combined.length);
+      const totalSamples = pcmChunks.reduce((sum, c) => sum + c.length, 0);
+      log('stop() called, chunks:', pcmChunks.length, 'samples:', totalSamples);
 
-      if (!combined) {
+      if (totalSamples === 0) {
         log('no audio captured');
         return '';
       }
+
+      const merged = new Int16Array(totalSamples);
+      let offset = 0;
+      for (const chunk of pcmChunks) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
+      }
+      const combined = encodeToBase64(new Uint8Array(merged.buffer));
 
       const url = getHttpTranscribeUrl();
       log('posting to', url);
