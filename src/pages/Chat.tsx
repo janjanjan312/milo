@@ -1213,11 +1213,22 @@ export default function Chat() {
     setIsRecording(false);
     setAudioLevel(0);
     setIsTranscribing(true);
+
+    // Immediately show a placeholder bubble in the chat area
+    const placeholderMsg: ChatMessage & { image?: string } = {
+      role: 'user',
+      text: '',
+      isTranscribing: true,
+    };
+    setMessages(prev => [...prev, placeholderMsg]);
+
     try {
       if (!pttRef.current && pttPromiseRef.current) {
         pttRef.current = await pttPromiseRef.current;
       }
       if (!pttRef.current) {
+        // Remove placeholder
+        setMessages(prev => prev.filter(m => m !== placeholderMsg));
         setIsTranscribing(false);
         return;
       }
@@ -1225,11 +1236,26 @@ export default function Chat() {
       pttRef.current = null;
       pttPromiseRef.current = null;
       if (text.trim()) {
-        handleSend(text, true);
+        // Replace placeholder with real text, then trigger AI
+        setMessages(prev =>
+          prev.map(m => m === placeholderMsg ? { ...m, text, isTranscribing: false } : m)
+        );
+        setIsTranscribing(false);
+
+        // Add to pending batch and trigger processBatch (same as handleSend's immediate path)
+        pendingMessagesRef.current.push(text);
+        if (batchTimeoutRef.current) {
+          clearTimeout(batchTimeoutRef.current);
+        }
+        processBatch();
+      } else {
+        // Empty result — remove placeholder
+        setMessages(prev => prev.filter(m => m !== placeholderMsg));
+        setIsTranscribing(false);
       }
     } catch (e: any) {
       console.error('[PTT] transcription error:', e);
-    } finally {
+      setMessages(prev => prev.filter(m => m !== placeholderMsg));
       setIsTranscribing(false);
     }
   };
@@ -1372,6 +1398,13 @@ export default function Chat() {
                     className="w-full rounded-lg max-h-48 object-cover mb-2"
                   />
                 )}
+                {msg.isTranscribing ? (
+                  <div className="flex gap-1">
+                    <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                ) : (
                 <div className="text-sm leading-relaxed space-y-2">
                   <ReactMarkdown 
                     remarkPlugins={[remarkGfm, remarkBreaks]}
@@ -1392,6 +1425,7 @@ export default function Chat() {
                     {normalizeMessageText(msg.text)}
                   </ReactMarkdown>
                 </div>
+                )}
               </div>
             </div>
             
@@ -1531,10 +1565,8 @@ export default function Chat() {
                   onTouchEnd={(e) => { e.preventDefault(); handlePttEnd(); }}
                   disabled={isLoading || isTranscribing}
                   className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-2xl transition-all select-none ${
-                    isTranscribing
-                      ? 'bg-stone-200 text-stone-500'
-                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200 active:bg-stone-200'
-                  }`}
+                    'bg-stone-100 text-stone-600 hover:bg-stone-200 active:bg-stone-200'
+                  } ${isTranscribing ? 'opacity-50' : ''}`}
                 >
                   {isRecording ? (
                     <div className="h-5 w-full">
@@ -1549,9 +1581,7 @@ export default function Chat() {
                     <>
                       <Mic size={20} />
                       <span className="text-sm font-medium">
-                        {isTranscribing
-                          ? (language === 'zh' ? '识别中...' : 'Transcribing...')
-                          : (language === 'zh' ? '按住说话' : 'Hold to talk')}
+                        {language === 'zh' ? '按住说话' : 'Hold to talk'}
                       </span>
                     </>
                   )}

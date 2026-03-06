@@ -392,9 +392,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return Array.from(plansMap.values());
   }, [customMealPlans, deletedPlanIds]);
 
-  // Persist chatMessages
+  // Persist chatMessages (exclude transient transcribing placeholders)
   useEffect(() => {
-    localStorage.setItem('chatMessages', JSON.stringify(chatMessages));
+    const persistable = chatMessages.filter(m => !m.isTranscribing);
+    localStorage.setItem('chatMessages', JSON.stringify(persistable));
     if (chatMessages.some(msg => msg.role === 'user')) {
       localStorage.setItem(HAS_CHATTED_ONCE_KEY, 'true');
     }

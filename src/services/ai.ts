@@ -30,6 +30,7 @@ export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
   suggestions?: string[];
+  isTranscribing?: boolean;
 }
 
 export interface MealLogPayloadItem {
