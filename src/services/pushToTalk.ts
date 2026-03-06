@@ -223,8 +223,8 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
           pendingAudio.length = 0;
           ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
           ws.send(JSON.stringify({ type: 'session.finish' }));
-          log('WS commit+finish sent, HTTP fires in 500ms if no WS response');
-          setTimeout(fireHttp, 500);
+          log('WS commit+finish sent, HTTP fires in 800ms if no WS response');
+          setTimeout(fireHttp, 800);
         } else {
           log('WS not ready, firing HTTP immediately');
           fireHttp();
