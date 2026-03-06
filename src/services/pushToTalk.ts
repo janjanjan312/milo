@@ -236,7 +236,7 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
             resolveStop = null;
             resolve(await fallbackToHttp());
           }
-        }, 8000);
+        }, 3000);
       });
     },
     cancel: () => {
