@@ -1,3 +1,5 @@
+export type AudioLevelCallback = (level: number) => void;
+
 export interface PushToTalkController {
   stop: () => Promise<string>;
   cancel: () => void;
@@ -30,7 +32,7 @@ function encodeFloat32ToBase64(float32: Float32Array): string {
  * On stop(), sends commit + finish and waits for the final transcript.
  * Most processing happens during recording, so stop() returns almost instantly.
  */
-export async function startRecording(language: 'zh' | 'en' = 'zh'): Promise<PushToTalkController> {
+export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?: AudioLevelCallback): Promise<PushToTalkController> {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
   const ws = new WebSocket(getWsUrl());
@@ -111,11 +113,19 @@ export async function startRecording(language: 'zh' | 'en' = 'zh'): Promise<Push
 
   processor.onaudioprocess = (e) => {
     if (stopped) return;
-    const b64 = encodeFloat32ToBase64(e.inputBuffer.getChannelData(0));
+    const channelData = e.inputBuffer.getChannelData(0);
+    const b64 = encodeFloat32ToBase64(channelData);
     if (sessionReady && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
     } else {
       pendingAudio.push(b64);
+    }
+    if (onAudioLevel) {
+      let sum = 0;
+      for (let i = 0; i < channelData.length; i++) {
+        sum += channelData[i] * channelData[i];
+      }
+      onAudioLevel(Math.sqrt(sum / channelData.length));
     }
   };
 

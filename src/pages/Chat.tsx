@@ -7,6 +7,7 @@ import { startRecording, type PushToTalkController } from '../services/pushToTal
 import { motion, AnimatePresence } from 'motion/react';
 import CameraCaptureModal from '../components/CameraCaptureModal';
 import SaveMealPlanModal from '../components/SaveMealPlanModal';
+import { VoiceWaveform } from '../components/VoiceWaveform';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -24,6 +25,7 @@ export default function Chat() {
   const [isStartingListening, setIsStartingListening] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [audioLevel, setAudioLevel] = useState(0);
   const pttRef = useRef<PushToTalkController | null>(null);
   const pttPromiseRef = useRef<Promise<PushToTalkController> | null>(null);
   const recordingRef = useRef(false);
@@ -1183,14 +1185,18 @@ export default function Chat() {
     if (recordingRef.current || isTranscribing || isLoading) return;
     recordingRef.current = true;
     setIsRecording(true);
+    setAudioLevel(0);
     try {
-      const promise = startRecording(language);
+      const promise = startRecording(language, (level) => {
+        setAudioLevel(level);
+      });
       pttPromiseRef.current = promise;
       const controller = await promise;
       pttRef.current = controller;
     } catch (e: any) {
       recordingRef.current = false;
       setIsRecording(false);
+      setAudioLevel(0);
       pttPromiseRef.current = null;
       if (e?.name === 'NotAllowedError') {
         alert(language === 'zh' ? '麦克风权限被拒绝，请检查浏览器设置。' : 'Microphone access denied.');
@@ -1202,6 +1208,7 @@ export default function Chat() {
     if (!recordingRef.current) return;
     recordingRef.current = false;
     setIsRecording(false);
+    setAudioLevel(0);
     setIsTranscribing(true);
     try {
       if (!pttRef.current && pttPromiseRef.current) {
@@ -1521,21 +1528,30 @@ export default function Chat() {
                   onTouchEnd={(e) => { e.preventDefault(); handlePttEnd(); }}
                   disabled={isLoading || isTranscribing}
                   className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-2xl transition-all select-none ${
-                    isRecording
-                      ? 'bg-red-50 text-red-600 ring-1 ring-red-300'
-                      : isTranscribing
+                    isTranscribing
                       ? 'bg-stone-200 text-stone-500'
                       : 'bg-stone-100 text-stone-600 hover:bg-stone-200 active:bg-stone-200'
                   }`}
                 >
-                  <Mic size={20} className={isRecording ? 'animate-pulse' : ''} />
-                  <span className="text-sm font-medium">
-                    {isRecording
-                      ? (language === 'zh' ? '松手发送' : 'Release to send')
-                      : isTranscribing
-                      ? (language === 'zh' ? '识别中...' : 'Transcribing...')
-                      : (language === 'zh' ? '按住说话' : 'Hold to talk')}
-                  </span>
+                  {isRecording ? (
+                    <div className="h-5 w-full">
+                      <VoiceWaveform
+                        isActive={isRecording}
+                        audioLevel={audioLevel}
+                        barCount={40}
+                        color="#78716c"
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <Mic size={20} />
+                      <span className="text-sm font-medium">
+                        {isTranscribing
+                          ? (language === 'zh' ? '识别中...' : 'Transcribing...')
+                          : (language === 'zh' ? '按住说话' : 'Hold to talk')}
+                      </span>
+                    </>
+                  )}
                 </button>
               )
             ) : (
