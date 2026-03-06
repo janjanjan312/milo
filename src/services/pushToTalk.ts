@@ -129,25 +129,8 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
         ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
       }
       pendingAudio.length = 0;
-      if (stopped && resolveStop) {
-        log('stop() was called before session ready, sending commit+finish now');
-        ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-        ws.send(JSON.stringify({ type: 'session.finish' }));
-        if (wsTimeoutId) clearTimeout(wsTimeoutId);
-        wsTimeoutId = setTimeout(async () => {
-          if (resolveStop) {
-            log('ws timeout (post-session-ready), trying HTTP fallback');
-            const resolve = resolveStop;
-            resolveStop = null;
-            if (ws.readyState <= WebSocket.OPEN) ws.close();
-            try {
-              resolve(await httpTranscribe(pcmChunks, language, log));
-            } catch (e: any) {
-              log('HTTP fallback also failed:', e.message);
-              resolve(accumulated);
-            }
-          }
-        }, 5000);
+      if (stopped) {
+        log('session ready after stop, but already using HTTP fallback');
       }
     }
 
@@ -227,25 +210,22 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
         }
       };
 
-      if (wsFailed || ws.readyState >= WebSocket.CLOSING) {
-        log('ws unavailable, using HTTP fallback');
+      if (wsFailed || ws.readyState >= WebSocket.CLOSING || !sessionReady) {
+        if (!sessionReady) log('session not ready at stop(), skipping WS');
+        else log('ws unavailable, using HTTP fallback');
         return fallbackToHttp();
       }
 
       return new Promise<string>((resolve) => {
         resolveStop = resolve;
 
-        if (sessionReady && ws.readyState === WebSocket.OPEN) {
-          for (const b64 of pendingAudio) {
-            ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
-          }
-          pendingAudio.length = 0;
-          log('sending commit+finish');
-          ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-          ws.send(JSON.stringify({ type: 'session.finish' }));
-        } else {
-          log('waiting for session to be ready before commit+finish');
+        for (const b64 of pendingAudio) {
+          ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
         }
+        pendingAudio.length = 0;
+        log('sending commit+finish');
+        ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+        ws.send(JSON.stringify({ type: 'session.finish' }));
 
         wsTimeoutId = setTimeout(async () => {
           if (resolveStop) {
@@ -253,7 +233,7 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
             resolveStop = null;
             resolve(await fallbackToHttp());
           }
-        }, 8000);
+        }, 5000);
       });
     },
     cancel: () => {
