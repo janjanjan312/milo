@@ -99,7 +99,6 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
   let accumulated = '';
   let resolveStop: ((text: string) => void) | null = null;
   let wsFailed = false;
-  let wsTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   const t0 = Date.now();
   const log = (...args: any[]) => console.log(`[PTT +${((Date.now() - t0) / 1000).toFixed(1)}s]`, ...args);
@@ -193,30 +192,12 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
       cleanup();
       log('stop() called, wsState:', ws.readyState, 'sessionReady:', sessionReady, 'pending:', pendingAudio.length, 'wsFailed:', wsFailed);
 
-      const fallbackToHttp = async (): Promise<string> => {
-        log('falling back to HTTP transcribe');
-        if (ws.readyState <= WebSocket.OPEN) ws.close();
-        try {
-          return await httpTranscribe(pcmChunks, language, log);
-        } catch (e: any) {
-          log('HTTP fallback also failed:', e.message);
-          return accumulated;
-        }
-      };
-
-      if (wsFailed || ws.readyState >= WebSocket.CLOSING || !sessionReady) {
-        if (!sessionReady) log('session not ready at stop(), skipping WS');
-        else log('ws unavailable, using HTTP fallback');
-        return fallbackToHttp();
-      }
-
       return new Promise<string>((resolve) => {
         let settled = false;
         const settle = (text: string, via: string) => {
           if (settled) return;
           settled = true;
           resolveStop = null;
-          if (wsTimeoutId) { clearTimeout(wsTimeoutId); wsTimeoutId = null; }
           log(`resolved via ${via}: "${text.slice(-40)}" (${text.length} chars)`);
           if (ws.readyState <= WebSocket.OPEN) ws.close();
           resolve(text);
@@ -224,24 +205,25 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
 
         resolveStop = (text: string) => settle(text, 'WS');
 
-        for (const b64 of pendingAudio) {
-          ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
+        if (sessionReady && ws.readyState === WebSocket.OPEN) {
+          for (const b64 of pendingAudio) {
+            ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
+          }
+          pendingAudio.length = 0;
+          ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+          ws.send(JSON.stringify({ type: 'session.finish' }));
+          log('WS commit+finish sent');
+        } else {
+          log('WS not ready, skipping commit');
         }
-        pendingAudio.length = 0;
-        log('sending commit+finish, racing WS vs HTTP (800ms grace)');
-        ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-        ws.send(JSON.stringify({ type: 'session.finish' }));
 
-        wsTimeoutId = setTimeout(() => {
-          if (settled) return;
-          log('WS grace period elapsed, firing HTTP in parallel');
-          httpTranscribe(pcmChunks, language, log)
-            .then((text) => settle(text, 'HTTP'))
-            .catch((e) => {
-              log('HTTP fallback failed:', e.message);
-              if (!settled) settle(accumulated, 'HTTP-error');
-            });
-        }, 800);
+        log('firing HTTP in parallel');
+        httpTranscribe(pcmChunks, language, log)
+          .then((text) => settle(text, 'HTTP'))
+          .catch((e) => {
+            log('HTTP failed:', e.message);
+            if (!settled) settle(accumulated, 'HTTP-error');
+          });
       });
     },
     cancel: () => {
