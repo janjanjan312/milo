@@ -51,7 +51,12 @@ function encodeToBase64(bytes: Uint8Array): string {
   return btoa(parts.join(''));
 }
 
-async function httpTranscribe(pcmChunks: Int16Array[], language: string, log: (...args: any[]) => void): Promise<string> {
+async function httpTranscribe(
+  pcmChunks: Int16Array[],
+  language: string,
+  log: (...args: any[]) => void,
+  signal?: AbortSignal,
+): Promise<string> {
   const totalSamples = pcmChunks.reduce((sum, c) => sum + c.length, 0);
   if (totalSamples === 0) return '';
 
@@ -68,6 +73,7 @@ async function httpTranscribe(pcmChunks: Int16Array[], language: string, log: (.
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    signal,
     body: JSON.stringify({ audio: b64, language }),
   });
   if (!res.ok) {
@@ -204,10 +210,12 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
 
       return new Promise<string>((resolve) => {
         let settled = false;
+        let httpController: AbortController | null = null;
         const settle = (text: string, via: string) => {
           if (settled) return;
           settled = true;
           resolveStop = null;
+          if (via === 'WS' && httpController) httpController.abort();
           log(`resolved via ${via}: "${text.slice(-40)}" (${text.length} chars)`);
           if (ws.readyState <= WebSocket.OPEN) ws.close();
           resolve(text);
@@ -218,9 +226,14 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
         const fireHttp = () => {
           if (settled) return;
           log('firing HTTP');
-          httpTranscribe(pcmChunks, language, log)
+          httpController = new AbortController();
+          httpTranscribe(pcmChunks, language, log, httpController.signal)
             .then((text) => settle(text, 'HTTP'))
             .catch((e) => {
+              if (e?.name === 'AbortError') {
+                log('HTTP aborted (WS already resolved)');
+                return;
+              }
               log('HTTP failed:', e.message);
               if (!settled) settle(accumulated, 'HTTP-error');
             });
@@ -232,8 +245,8 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
           }
           pendingAudio.length = 0;
           sendCommitFinish();
-          log('WS commit+finish sent, HTTP fires in 800ms if no WS response');
-          setTimeout(fireHttp, 800);
+          log('WS commit+finish sent, HTTP fires in 1800ms if no WS response');
+          setTimeout(fireHttp, 1800);
         } else {
           log('WS not ready, firing HTTP immediately');
           fireHttp();
