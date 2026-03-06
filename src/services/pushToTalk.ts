@@ -51,6 +51,12 @@ function encodeToBase64(bytes: Uint8Array): string {
   return btoa(parts.join(''));
 }
 
+function getWsGraceMs(recordingElapsedMs: number): number {
+  if (recordingElapsedMs <= 4000) return 1600;
+  if (recordingElapsedMs <= 8000) return 2400;
+  return 3200;
+}
+
 async function httpTranscribe(
   pcmChunks: Int16Array[],
   language: string,
@@ -244,9 +250,10 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
             ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
           }
           pendingAudio.length = 0;
+          const wsGraceMs = getWsGraceMs(Date.now() - t0);
           sendCommitFinish();
-          log('WS commit+finish sent, HTTP fires in 1800ms if no WS response');
-          setTimeout(fireHttp, 1800);
+          log(`WS commit+finish sent, HTTP fires in ${wsGraceMs}ms if no WS response`);
+          setTimeout(fireHttp, wsGraceMs);
         } else {
           log('WS not ready, firing HTTP immediately');
           fireHttp();
