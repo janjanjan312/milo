@@ -99,9 +99,17 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
   let accumulated = '';
   let resolveStop: ((text: string) => void) | null = null;
   let wsFailed = false;
+  let stopRequested = false;
+  let commitSent = false;
 
   const t0 = Date.now();
   const log = (...args: any[]) => console.log(`[PTT +${((Date.now() - t0) / 1000).toFixed(1)}s]`, ...args);
+  const sendCommitFinish = () => {
+    if (commitSent || ws.readyState !== WebSocket.OPEN) return;
+    commitSent = true;
+    ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+    ws.send(JSON.stringify({ type: 'session.finish' }));
+  };
 
   ws.onopen = () => {
     log('ws open, sending session.update');
@@ -128,8 +136,9 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
         ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
       }
       pendingAudio.length = 0;
-      if (stopped) {
-        log('session ready after stop, but already using HTTP fallback');
+      if (stopRequested) {
+        log('session ready after stop, now sending WS commit+finish');
+        sendCommitFinish();
       }
     }
 
@@ -190,6 +199,7 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
   return {
     stop: () => {
       cleanup();
+      stopRequested = true;
       log('stop() called, wsState:', ws.readyState, 'sessionReady:', sessionReady, 'pending:', pendingAudio.length, 'wsFailed:', wsFailed);
 
       return new Promise<string>((resolve) => {
@@ -221,8 +231,7 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
             ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
           }
           pendingAudio.length = 0;
-          ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-          ws.send(JSON.stringify({ type: 'session.finish' }));
+          sendCommitFinish();
           log('WS commit+finish sent, HTTP fires in 800ms if no WS response');
           setTimeout(fireHttp, 800);
         } else {
