@@ -53,7 +53,7 @@ function encodeToBase64(bytes: Uint8Array): string {
 
 function getWsGraceMs(recordingElapsedMs: number): number {
   if (recordingElapsedMs <= 4000) return 1600;
-  if (recordingElapsedMs <= 8000) return 2400;
+  if (recordingElapsedMs <= 7000) return 2400;
   return 3200;
 }
 
