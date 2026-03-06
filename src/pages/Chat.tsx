@@ -454,7 +454,7 @@ export default function Chat() {
     const waterMatch = combinedText.match(
       /(?:喝了|刚喝了|我喝了|又喝了|还喝了|drank|just drank|had)\s*(?:(\d+)\s*(?:ml|毫升)|(\d+)\s*(?:杯|cup|glass)(?:es)?(?:\s*水|\s*water)?|(?:一[大]?杯|a\s*(?:big\s*)?(?:glass|cup)\s*(?:of\s*)?water))/i
     );
-    if (waterMatch) {
+    if (waterMatch && !forcedSceneRef.current) {
       let amount = 250;
       if (waterMatch[1]) amount = parseInt(waterMatch[1]);
       else if (waterMatch[2]) amount = parseInt(waterMatch[2]) * 250;
@@ -501,17 +501,20 @@ export default function Chat() {
       const combinedNormalized = (combinedText || '').trim().toLowerCase();
       const combinedCompact = combinedNormalized.replace(/[\s，,。.!！?？~～'’"“”]/g, '');
       const interactionScene: InteractionScene =
-        hasExplicitRecordIntent
-          ? 'meal_estimate'
-          : ((ruleIntent.scene === 'meal_estimate' || ruleIntent.scene === 'record_analysis')
-              ? ruleIntent.scene
-              : (forcedScene || modelIntent?.scene || ruleIntent.scene));
+        forcedScene
+          ? forcedScene
+          : hasExplicitRecordIntent
+            ? 'meal_estimate'
+            : ((ruleIntent.scene === 'meal_estimate' || ruleIntent.scene === 'record_analysis')
+                ? ruleIntent.scene
+                : (modelIntent?.scene || ruleIntent.scene));
       if (interactionScene === 'diet_coaching' && !forcedSceneRef.current) {
         forcedSceneRef.current = 'diet_coaching';
       }
       const hasMealContext = hasConcreteMealContext(combinedText, currentImage);
       const imageAutoRecord = Boolean(currentImage) && interactionScene === 'meal_estimate';
-      let shouldAttemptRecord = imageAutoRecord || ((hasExplicitRecordIntent || hasReportedMealIntake) && hasMealContext);
+      let shouldAttemptRecord = !forcedScene
+        && (imageAutoRecord || ((hasExplicitRecordIntent || hasReportedMealIntake) && hasMealContext));
 
       const mainReplyStartMs = getNowMs();
       const { text, mealPlan, correctedUserText, suggestions, mealLog } = await sendMessageToAI(
