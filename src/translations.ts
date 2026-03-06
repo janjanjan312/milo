@@ -268,7 +268,7 @@ export const translations = {
     },
     onboarding: {
       step1: {
-        title: "先了解一下基础身体数据",
+        title: "嗨，先让我了解一下你吧",
         gender: '性别',
         age: '年龄',
         height: '身高',
