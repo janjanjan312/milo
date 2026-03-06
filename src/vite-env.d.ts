@@ -8,6 +8,7 @@ interface ImportMetaEnv {
   readonly VITE_VISION_PROVIDER: string;
   readonly VITE_QWEN_TEXT_MODEL: string;
   readonly VITE_ASR_WS_URL?: string;
+  readonly VITE_ASR_HTTP_URL?: string;
 }
 
 interface ImportMeta {
