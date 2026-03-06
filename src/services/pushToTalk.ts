@@ -5,35 +5,12 @@ export interface PushToTalkController {
   cancel: () => void;
 }
 
-function getWsUrl(): string {
-  const envUrl = import.meta.env.VITE_ASR_WS_URL;
-  if (envUrl) return envUrl;
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${proto}://${location.host}/ws/asr`;
-}
-
 function getHttpTranscribeUrl(): string {
   const wsUrl = import.meta.env.VITE_ASR_WS_URL;
   if (wsUrl) {
     return wsUrl.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:') + '/transcribe';
   }
   return `${location.origin}/api/transcribe`;
-}
-
-async function httpTranscribe(allAudio: string[], language: string): Promise<string> {
-  const combined = allAudio.join('');
-  if (!combined) return '';
-  const url = getHttpTranscribeUrl();
-  console.log(`[PTT-HTTP] posting ${combined.length} base64 chars to ${url}`);
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ audio: combined, language }),
-  });
-  if (!res.ok) throw new Error(`HTTP transcribe failed: ${res.status}`);
-  const data = await res.json();
-  console.log(`[PTT-HTTP] result: "${(data.text || '').slice(-40)}"`);
-  return data.text || '';
 }
 
 function encodeFloat32ToBase64(float32: Float32Array): string {
@@ -52,101 +29,27 @@ function encodeFloat32ToBase64(float32: Float32Array): string {
 }
 
 /**
- * Streams audio to DashScope via WebSocket while recording.
- * On stop(), sends commit + finish and waits for the final transcript.
- * Most processing happens during recording, so stop() returns almost instantly.
+ * Records audio locally and transcribes via HTTP POST on stop().
+ * Audio is buffered in memory during recording, then sent to the
+ * server-side ASR endpoint which connects to DashScope internally.
  */
 export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?: AudioLevelCallback): Promise<PushToTalkController> {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-  const ws = new WebSocket(getWsUrl());
   const audioContext = new AudioContext({ sampleRate: 16000 });
   const source = audioContext.createMediaStreamSource(stream);
   const processor = audioContext.createScriptProcessor(2048, 1, 1);
 
   let stopped = false;
-  let sessionReady = false;
-  const pendingAudio: string[] = [];
   const allAudio: string[] = [];
-  let accumulated = '';
-  let resolveStop: ((text: string) => void) | null = null;
-  let wsFailed = false;
 
   const t0 = Date.now();
   const log = (...args: any[]) => console.log(`[PTT +${((Date.now() - t0) / 1000).toFixed(1)}s]`, ...args);
 
-  ws.onopen = () => {
-    log('ws open, sending session.update');
-    ws.send(JSON.stringify({
-      type: 'session.update',
-      session: {
-        modalities: ['text'],
-        input_audio_format: 'pcm',
-        sample_rate: 16000,
-        input_audio_transcription: { language },
-        turn_detection: null,
-      },
-    }));
-  };
-
-  ws.onmessage = (evt) => {
-    let msg: any;
-    try { msg = JSON.parse(evt.data); } catch { return; }
-
-    if (msg.type === 'session.updated') {
-      log('session ready, pending audio chunks:', pendingAudio.length);
-      sessionReady = true;
-      for (const b64 of pendingAudio) {
-        ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
-      }
-      pendingAudio.length = 0;
-      if (stopped && resolveStop) {
-        log('stop() was called before session ready, sending commit+finish now');
-        ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-        ws.send(JSON.stringify({ type: 'session.finish' }));
-      }
-    }
-
-    if (msg.type === 'conversation.item.input_audio_transcription.completed') {
-      const t = (msg.transcript || '').trim();
-      if (t) accumulated += t;
-      log('completed:', accumulated.slice(-40));
-    }
-
-    if (msg.type === 'session.finished' && resolveStop) {
-      log('session.finished, resolving with', accumulated.length, 'chars');
-      const resolve = resolveStop;
-      resolveStop = null;
-      ws.close();
-      resolve(accumulated);
-    }
-
-    if (msg.type === 'error') {
-      log('DashScope error:', msg.error);
-    }
-  };
-
-  ws.onerror = (e) => { log('ws error', e); wsFailed = true; };
-  ws.onclose = (e) => {
-    log('ws closed, code:', e.code, 'reason:', e.reason);
-    if (resolveStop) {
-      log('resolving on close with', accumulated.length, 'chars');
-      const resolve = resolveStop;
-      resolveStop = null;
-      resolve(accumulated);
-    }
-  };
-
   processor.onaudioprocess = (e) => {
     if (stopped) return;
     const channelData = e.inputBuffer.getChannelData(0);
-    const b64 = encodeFloat32ToBase64(channelData);
-    allAudio.push(b64);
-    if (sessionReady && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
-    } else {
-      pendingAudio.push(b64);
-    }
+    allAudio.push(encodeFloat32ToBase64(channelData));
     if (onAudioLevel) {
       let sum = 0;
       for (let i = 0; i < channelData.length; i++) {
@@ -167,53 +70,39 @@ export async function startRecording(language: 'zh' | 'en' = 'zh', onAudioLevel?
   };
 
   return {
-    stop: () => {
+    stop: async () => {
       cleanup();
-      log('stop() called, wsState:', ws.readyState, 'sessionReady:', sessionReady, 'pending:', pendingAudio.length, 'wsFailed:', wsFailed);
+      const combined = allAudio.join('');
+      log('stop() called, audio chunks:', allAudio.length, 'total base64 chars:', combined.length);
 
-      const fallbackToHttp = async (): Promise<string> => {
-        log('falling back to HTTP transcribe with', allAudio.length, 'chunks');
-        if (ws.readyState <= WebSocket.OPEN) ws.close();
-        try {
-          return await httpTranscribe(allAudio, language);
-        } catch (e: any) {
-          log('HTTP fallback also failed:', e.message);
-          return accumulated;
-        }
-      };
-
-      if (wsFailed || ws.readyState >= WebSocket.CLOSING) {
-        log('ws unavailable, using HTTP fallback');
-        return fallbackToHttp();
+      if (!combined) {
+        log('no audio captured');
+        return '';
       }
 
-      return new Promise<string>((resolve) => {
-        resolveStop = resolve;
+      const url = getHttpTranscribeUrl();
+      log('posting to', url);
 
-        if (sessionReady && ws.readyState === WebSocket.OPEN) {
-          for (const b64 of pendingAudio) {
-            ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
-          }
-          pendingAudio.length = 0;
-          log('sending commit+finish');
-          ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-          ws.send(JSON.stringify({ type: 'session.finish' }));
-        } else {
-          log('waiting for session to be ready before commit+finish');
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ audio: combined, language }),
+        });
+        if (!res.ok) {
+          const errBody = await res.text().catch(() => '');
+          throw new Error(`HTTP ${res.status}: ${errBody}`);
         }
-
-        setTimeout(async () => {
-          if (resolveStop) {
-            log('ws timeout, trying HTTP fallback');
-            resolveStop = null;
-            resolve(await fallbackToHttp());
-          }
-        }, 6000);
-      });
+        const data = await res.json();
+        log('result:', `"${(data.text || '').slice(-40)}"`, `(${((Date.now() - t0) / 1000).toFixed(1)}s total)`);
+        return data.text || '';
+      } catch (e: any) {
+        log('transcribe failed:', e.message);
+        return '';
+      }
     },
     cancel: () => {
       cleanup();
-      if (ws.readyState <= WebSocket.OPEN) ws.close();
     },
   };
 }
