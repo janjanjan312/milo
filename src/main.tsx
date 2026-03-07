@@ -14,11 +14,7 @@ if (isStandalone) {
   document.addEventListener('touchend', (e) => {
     const el = e.target;
     if (el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && el.type === 'text')) {
-      el.readOnly = true;
-      el.readOnly = false;
-      el.blur();
       el.focus();
-      el.click();
     }
   }, true);
 }
