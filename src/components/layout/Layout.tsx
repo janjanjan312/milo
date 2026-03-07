@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, useRef } from 'react';
 import { NavLink } from 'react-router-dom';
 import { MessageSquare, ClipboardList, User } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -6,6 +6,7 @@ import { translations } from '../../translations';
 
 function useKeyboardVisible() {
   const [visible, setVisible] = useState(false);
+  const showTimer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     const isEditable = (el: EventTarget | null): boolean => {
@@ -16,9 +17,13 @@ function useKeyboardVisible() {
     };
 
     const onFocusIn = (e: FocusEvent) => {
-      if (isEditable(e.target)) setVisible(true);
+      if (isEditable(e.target)) {
+        clearTimeout(showTimer.current);
+        showTimer.current = setTimeout(() => setVisible(true), 350);
+      }
     };
     const onFocusOut = () => {
+      clearTimeout(showTimer.current);
       setTimeout(() => {
         if (!isEditable(document.activeElement)) setVisible(false);
       }, 50);
@@ -27,6 +32,7 @@ function useKeyboardVisible() {
     document.addEventListener('focusin', onFocusIn);
     document.addEventListener('focusout', onFocusOut);
     return () => {
+      clearTimeout(showTimer.current);
       document.removeEventListener('focusin', onFocusIn);
       document.removeEventListener('focusout', onFocusOut);
     };
@@ -47,8 +53,8 @@ export default function Layout({ children }: { children: ReactNode }) {
       </main>
 
       <nav
-        className={`bg-white border-t border-stone-200 px-6 flex justify-around items-center z-50 transition-all duration-200 ${
-          keyboardUp ? 'h-0 pt-0 overflow-hidden opacity-0' : 'pt-3'
+        className={`bg-white border-t border-stone-200 px-6 flex justify-around items-center z-50 ${
+          keyboardUp ? 'h-0 !p-0 overflow-hidden opacity-0' : 'pt-3'
         }`}
         style={{ paddingBottom: keyboardUp ? 0 : 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
       >
