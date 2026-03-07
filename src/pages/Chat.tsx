@@ -1488,7 +1488,7 @@ export default function Chat() {
         <div className="px-4 py-3">
 
         {selectedImages.length > 0 && (
-          <div className="flex gap-2 mb-3 overflow-x-auto no-scrollbar">
+          <div className="flex gap-2 mb-3 pt-2 overflow-x-auto no-scrollbar">
             <AnimatePresence>
               {selectedImages.map((img, idx) => (
                 <motion.div
