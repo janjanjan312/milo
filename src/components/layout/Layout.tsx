@@ -41,18 +41,21 @@ export default function Layout({ children }: { children: ReactNode }) {
   const keyboardUp = useKeyboardVisible();
 
   return (
-    <div className="flex flex-col h-[100dvh] sm:h-full bg-stone-50 text-stone-900 font-sans">
-      <main className="flex-1 overflow-auto min-h-0">
+    <div className="flex flex-col h-[100dvh] sm:h-full bg-stone-50 text-stone-900 font-sans relative">
+      <main className="flex-1 overflow-auto min-h-0" style={{ paddingBottom: keyboardUp ? 0 : undefined }}>
         {children}
       </main>
 
-      {!keyboardUp && (
-        <nav className="bg-white border-t border-stone-200 px-6 pt-3 flex justify-around items-center z-50" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}>
-          <NavItem to="/chat" icon={<MessageSquare size={24} />} label={t.nav.chat} />
-          <NavItem to="/record" icon={<ClipboardList size={24} />} label={t.nav.record} />
-          <NavItem to="/me" icon={<User size={24} />} label={t.nav.me} />
-        </nav>
-      )}
+      <nav
+        className={`bg-white border-t border-stone-200 px-6 pt-3 flex justify-around items-center z-50 transition-transform duration-200 ${
+          keyboardUp ? 'translate-y-full pointer-events-none' : 'translate-y-0'
+        }`}
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
+      >
+        <NavItem to="/chat" icon={<MessageSquare size={24} />} label={t.nav.chat} />
+        <NavItem to="/record" icon={<ClipboardList size={24} />} label={t.nav.record} />
+        <NavItem to="/me" icon={<User size={24} />} label={t.nav.me} />
+      </nav>
     </div>
   );
 }
