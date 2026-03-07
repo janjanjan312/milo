@@ -40,7 +40,7 @@ export default function Chat() {
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const asrSessionRef = useRef<{ stop: () => Promise<string>; flush: () => Promise<string> } | null>(null);
-  const textareaRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const forcedSceneRef = useRef<InteractionScene | null>(null);
   const startedModeRef = useRef<InteractionScene | null>(null);
   const showQuickModeAfterReplyRef = useRef(false);
@@ -66,15 +66,12 @@ export default function Chat() {
   const switchInputMode = (mode: 'voice' | 'text') => {
     setInputMode(mode);
     localStorage.setItem('diet_input_mode', mode);
-    if (mode === 'text') {
-      if (isListening || isStartingListening) {
-        asrSessionRef.current?.stop();
-        asrSessionRef.current = null;
-        setIsListening(false);
-        setIsStartingListening(false);
-        setInterimInput('');
-      }
-      setTimeout(() => textareaRef.current?.focus(), 50);
+    if (mode === 'text' && (isListening || isStartingListening)) {
+      asrSessionRef.current?.stop();
+      asrSessionRef.current = null;
+      setIsListening(false);
+      setIsStartingListening(false);
+      setInterimInput('');
     }
   };
 
@@ -429,11 +426,11 @@ export default function Chat() {
     }
   }, [messages, isListening, selectedImages, interimInput]);
 
-  // Keep cursor at end of input after interimInput changes
+  // Auto-resize textarea
   useEffect(() => {
-    if (textareaRef.current && interimInput) {
-      const len = (input + interimInput).length;
-      textareaRef.current.setSelectionRange(len, len);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
     }
   }, [input, interimInput]);
 
@@ -1568,25 +1565,26 @@ export default function Chat() {
                 </button>
               )
             ) : (
-              <div className="flex-1 flex items-center gap-1.5 bg-stone-100 rounded-full px-3">
-                <input
+              <div
+                className="flex-1 flex items-center gap-1.5 bg-stone-100 rounded-full px-3"
+                onTouchEnd={() => textareaRef.current?.focus()}
+              >
+                <textarea
                   ref={textareaRef}
-                  type="text"
-                  enterKeyHint="send"
                   value={input + interimInput}
                   onChange={(e) => {
                     setInput(e.target.value);
                     setInterimInput('');
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
+                    if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
                       handleSend(undefined, true);
                     }
                   }}
                   placeholder={t.chat.placeholder}
-                  className="flex-1 bg-transparent border-none outline-none text-base text-stone-900 placeholder:text-stone-400 py-3"
-                  style={{ fontSize: '16px' }}
+                  rows={1}
+                  className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-stone-900 placeholder:text-stone-400 resize-none max-h-32 py-3"
                 />
                 <button 
                   onClick={() => handleSend(undefined, true)}
