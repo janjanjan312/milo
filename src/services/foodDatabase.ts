@@ -145,14 +145,19 @@ function getDatabase(): FoodNutritionItem[] {
 // Search & match
 // ---------------------------------------------------------------------------
 
-export function searchFood(query: string, limit = 5): FoodNutritionItem[] {
+export interface ScoredFoodItem {
+  item: FoodNutritionItem;
+  score: number;
+}
+
+export function searchFoodWithScore(query: string, limit = 5): ScoredFoodItem[] {
   const db = getDatabase();
 
   const cleanQuery = extractCleanName(query);
   const q = normalize(cleanQuery);
   if (!q || q.length < 1) return [];
 
-  const scored: { item: FoodNutritionItem; score: number }[] = [];
+  const scored: ScoredFoodItem[] = [];
 
   for (const item of db) {
     const name = normalize(item.cleanName);
@@ -166,6 +171,7 @@ export function searchFood(query: string, limit = 5): FoodNutritionItem[] {
     } else if (name.startsWith(q) || q.startsWith(name)) {
       score = 85 - Math.abs(name.length - q.length) * 2;
       if (q.length <= 2 && name.length > q.length + 2) score -= 30;
+      if (q.length <= 2 && name.length > q.length) score -= 25;
     } else if (name.includes(q)) {
       score = 75 - (name.length - q.length);
       if (q.length <= 2) score -= 20;
@@ -184,7 +190,11 @@ export function searchFood(query: string, limit = 5): FoodNutritionItem[] {
   }
 
   scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, limit).map(s => s.item);
+  return scored.slice(0, limit);
+}
+
+export function searchFood(query: string, limit = 5): FoodNutritionItem[] {
+  return searchFoodWithScore(query, limit).map(s => s.item);
 }
 
 export function findFoodsInText(text: string): FoodNutritionItem[] {
@@ -242,6 +252,8 @@ function convertToGrams(serving: number, unit: string): number {
   return serving;
 }
 
+const MIN_ENRICH_SCORE = 60;
+
 export function getNutritionForServing(foodName: string, servingG: number): {
   calories: number;
   protein: number;
@@ -251,12 +263,12 @@ export function getNutritionForServing(foodName: string, servingG: number): {
   matched: boolean;
   matchedFoodName?: string;
 } {
-  const matches = searchFood(foodName, 1);
-  if (matches.length === 0) {
+  const matches = searchFoodWithScore(foodName, 1);
+  if (matches.length === 0 || matches[0].score < MIN_ENRICH_SCORE) {
     return { calories: 0, protein: 0, fat: 0, carbs: 0, dietaryFiber: 0, matched: false };
   }
 
-  const food = matches[0];
+  const food = matches[0].item;
   const factor = servingG / 100;
 
   return {
