@@ -1565,10 +1565,7 @@ export default function Chat() {
                 </button>
               )
             ) : (
-              <div
-                className="flex-1 flex items-center gap-1.5 bg-stone-100 rounded-full px-3"
-                onTouchEnd={() => textareaRef.current?.focus()}
-              >
+              <div className="flex-1 flex items-center gap-1.5 bg-stone-100 rounded-full px-3">
                 <textarea
                   ref={textareaRef}
                   inputMode="text"
