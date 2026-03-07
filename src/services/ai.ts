@@ -506,12 +506,13 @@ export async function sendMessageToAI(
   history: ChatMessage[], 
   newMessage: string, 
   userContext: any,
-  image?: string // Base64 string
+  images?: string[]
 ): Promise<{ text: string; mealPlan?: MealPlan; correctedUserText?: string; suggestions?: string[]; mealLog?: MealLogPayload }> {
   const language = userContext.language || 'en' as 'en' | 'zh';
+  const hasImages = images && images.length > 0;
   try {
     await ensureFoodDatabaseLoaded();
-    const route = resolveRoute(Boolean(image));
+    const route = resolveRoute(Boolean(hasImages));
     if (!route) {
       return {
         text:
@@ -525,7 +526,14 @@ export async function sendMessageToAI(
     let responseText = '';
 
     const scene = (userContext?.interactionScene as InteractionScene) || 'diet_coaching';
-    const maxTokens = scene === 'meal_estimate' ? 1024 : 4096;
+    const maxTokens = scene === 'meal_estimate' ? (hasImages && images.length > 1 ? 2048 : 1024) : 4096;
+
+    const userContent = hasImages
+      ? [
+          ...images.map(img => ({ type: 'image_url' as const, image_url: { url: img } })),
+          { type: 'text' as const, text: newMessage || (language === 'zh' ? `请逐一分析这${images.length > 1 ? `${images.length}张` : '张'}图片中的食物。` : `Please analyze the food in ${images.length > 1 ? `these ${images.length} images` : 'this image'}.`) },
+        ]
+      : (newMessage || (language === 'zh' ? '请继续。' : 'Please continue.'));
 
     const completionPayload = await requestChatCompletions(route.provider, {
       model: route.model,
@@ -533,15 +541,7 @@ export async function sendMessageToAI(
       messages: [
         { role: 'system', content: systemPrompt },
         ...(scene === 'meal_estimate' ? [] : historyToChatMessages(history)),
-        {
-          role: 'user',
-          content: image
-            ? [
-                { type: 'image_url', image_url: { url: image } },
-                { type: 'text', text: newMessage || (language === 'zh' ? '请分析这张图片。' : 'Please analyze this image.') },
-              ]
-            : (newMessage || (language === 'zh' ? '请继续。' : 'Please continue.')),
-        },
+        { role: 'user', content: userContent },
       ],
     });
     responseText = extractTextFromQwenResponse(completionPayload);

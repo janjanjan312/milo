@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useApp, MealItem, PlanTemplate } from '../context/AppContext';
 import { sendMessageToAI, ChatMessage, MealLogPayload, extractMealLogForRecord, InteractionScene, detectInteractionIntent } from '../services/ai';
-import { Send, Mic, Camera, X, Image as ImageIcon, ChefHat, Keyboard, Menu, Trash2 } from 'lucide-react';
+import { Send, Mic, Camera, X, ChefHat, Keyboard, Menu, Trash2 } from 'lucide-react';
 import { startRealtimeASR } from '../services/speechRecognition';
 import { startRecording, type PushToTalkController } from '../services/pushToTalk';
 import { motion, AnimatePresence } from 'motion/react';
-import CameraCaptureModal from '../components/CameraCaptureModal';
+
 import SaveMealPlanModal from '../components/SaveMealPlanModal';
 import { VoiceWaveform } from '../components/VoiceWaveform';
 import ReactMarkdown from 'react-markdown';
@@ -32,9 +32,7 @@ export default function Chat() {
   const [inputMode, setInputMode] = useState<'voice' | 'text'>(() => {
     return (localStorage.getItem('diet_input_mode') as 'voice' | 'text') || 'voice';
   });
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [showCameraModal, setShowCameraModal] = useState(false);
-  const [showCameraMenu, setShowCameraMenu] = useState(false);
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [interimInput, setInterimInput] = useState('');
   const [lastSavedPlanId, setLastSavedPlanId] = useState<string | null>(null);
   const lastSavedPlanHashRef = useRef<string | null>(null);
@@ -52,7 +50,7 @@ export default function Chat() {
   // Batching Refs
   const pendingMessagesRef = useRef<string[]>([]);
   const batchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const pendingImageRef = useRef<string | null>(null);
+  const pendingImagesRef = useRef<string[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isFirstRender = useRef(true);
@@ -426,7 +424,7 @@ export default function Chat() {
     } else {
       scrollToBottom();
     }
-  }, [messages, isListening, selectedImage, interimInput]);
+  }, [messages, isListening, selectedImages, interimInput]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -440,11 +438,12 @@ export default function Chat() {
     const getNowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
     const processStartMs = getNowMs();
     const combinedText = pendingMessagesRef.current.join(' ');
-    const currentImage = pendingImageRef.current;
+    const currentImages = pendingImagesRef.current;
+    const currentImage = currentImages[0] || null;
     
     // Clear pending
     pendingMessagesRef.current = [];
-    pendingImageRef.current = null;
+    pendingImagesRef.current = [];
     
     if (!combinedText.trim() && !currentImage) return;
 
@@ -514,7 +513,7 @@ export default function Chat() {
       const hasMealContext = hasConcreteMealContext(combinedText, currentImage);
       const imageAutoRecord = Boolean(currentImage) && interactionScene === 'meal_estimate';
       let shouldAttemptRecord = (!forcedScene || forcedScene === 'meal_estimate')
-        && (imageAutoRecord || ((hasExplicitRecordIntent || hasReportedMealIntake) && hasMealContext));
+        && (imageAutoRecord || forcedScene === 'meal_estimate' || ((hasExplicitRecordIntent || hasReportedMealIntake) && hasMealContext));
 
       const mainReplyStartMs = getNowMs();
       const { text, mealPlan, correctedUserText, suggestions, mealLog } = await sendMessageToAI(
@@ -529,7 +528,7 @@ export default function Chat() {
           dailyLogs: interactionScene === 'record_analysis' ? dailyLogs : undefined,
           todayWaterTotal,
         },
-        currentImage || undefined
+        currentImages.length > 0 ? currentImages : undefined
       );
       const mainReplyElapsedMs = Math.round(getNowMs() - mainReplyStartMs);
       const toSafeCategory = (raw: any): MealItem['category'] => {
@@ -1080,12 +1079,13 @@ export default function Chat() {
       if (finalText && finalText.length >= fullInput.length) fullInput = finalText;
     }
 
-    if (!fullInput.trim() && !selectedImage) return;
+    if (!fullInput.trim() && selectedImages.length === 0) return;
 
-    const userMsg: ChatMessage & { image?: string } = { 
+    const userMsg: ChatMessage & { image?: string; images?: string[] } = { 
       role: 'user', 
       text: fullInput,
-      image: selectedImage || undefined
+      image: selectedImages[0] || undefined,
+      images: selectedImages.length > 0 ? selectedImages : undefined,
     };
     
     // Add to UI immediately
@@ -1095,13 +1095,13 @@ export default function Chat() {
     if (fullInput.trim()) {
       pendingMessagesRef.current.push(fullInput);
     }
-    if (selectedImage) {
-      pendingImageRef.current = selectedImage;
+    if (selectedImages.length > 0) {
+      pendingImagesRef.current = selectedImages;
     }
     
     setInput('');
     setInterimInput('');
-    setSelectedImage(null);
+    setSelectedImages([]);
 
     // Debounce sending to AI
     if (batchTimeoutRef.current) {
@@ -1284,27 +1284,19 @@ export default function Chat() {
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach(file => {
       const reader = new FileReader();
       reader.onloadend = async () => {
         const compressed = await compressImage(reader.result as string);
-        setSelectedImage(compressed);
+        setSelectedImages(prev => [...prev, compressed]);
       };
       reader.readAsDataURL(file);
-    }
-    // Reset input so same file can be selected again if needed
+    });
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-    setShowCameraMenu(false);
-  };
-
-  const handleCameraCapture = async (imageData: string) => {
-    const compressed = await compressImage(imageData);
-    setSelectedImage(compressed);
-    setShowCameraModal(false);
-    setShowCameraMenu(false);
   };
 
   // Auto-refresh chat daily
@@ -1383,7 +1375,7 @@ export default function Chat() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 pt-14 space-y-4" onClick={() => { setShowCameraMenu(false); setShowHeaderMenu(false); }}>
+      <div className="flex-1 overflow-y-auto p-4 pt-14 space-y-4" onClick={() => { setShowHeaderMenu(false); }}>
         {messages.map((msg, idx) => (
           <div key={idx} className="flex flex-col">
             <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -1394,13 +1386,19 @@ export default function Chat() {
                     : 'bg-white border border-stone-200 text-stone-800 rounded-tl-none shadow-sm'
                 }`}
               >
-                {msg.image && (
+                {(msg as any).images && (msg as any).images.length > 1 ? (
+                  <div className="grid grid-cols-2 gap-1.5 mb-2">
+                    {(msg as any).images.map((img: string, i: number) => (
+                      <img key={i} src={img} alt={`Upload ${i + 1}`} className="w-full rounded-lg max-h-36 object-cover" />
+                    ))}
+                  </div>
+                ) : msg.image ? (
                   <img 
                     src={msg.image} 
                     alt="User upload" 
                     className="w-full rounded-lg max-h-48 object-cover mb-2"
                   />
-                )}
+                ) : null}
                 {msg.isTranscribing ? (
                   <div className="flex gap-1">
                     <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -1483,81 +1481,60 @@ export default function Chat() {
         {/* Input Area */}
         <div className="px-4 py-3">
 
-        <AnimatePresence>
-          {selectedImage && (
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="relative inline-block mb-3"
-            >
-              <img 
-                src={selectedImage} 
-                alt="Preview" 
-                className="h-20 w-20 object-cover rounded-xl border border-stone-200"
-              />
-              <button 
-                onClick={() => setSelectedImage(null)}
-                className="absolute -top-2 -right-2 bg-stone-900 text-white rounded-full p-1 shadow-md hover:bg-stone-700"
-              >
-                <X size={12} />
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Camera Menu */}
-        <AnimatePresence>
-          {showCameraMenu && (
-            <motion.div
-              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute bottom-20 left-4 bg-white rounded-xl shadow-lg border border-stone-200 overflow-hidden min-w-[160px] z-30"
-            >
-              <button 
-                onClick={() => setShowCameraModal(true)}
-                className="w-full px-4 py-3 text-left text-sm font-medium text-stone-700 hover:bg-stone-50 flex items-center gap-2 border-b border-stone-100"
-              >
-                <Camera size={16} />
-                Take Photo
-              </button>
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full px-4 py-3 text-left text-sm font-medium text-stone-700 hover:bg-stone-50 flex items-center gap-2"
-              >
-                <ImageIcon size={16} />
-                Upload Image
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {selectedImages.length > 0 && (
+          <div className="flex gap-2 mb-3 overflow-x-auto no-scrollbar">
+            <AnimatePresence>
+              {selectedImages.map((img, idx) => (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  className="relative flex-shrink-0"
+                >
+                  <img 
+                    src={img} 
+                    alt={`Preview ${idx + 1}`} 
+                    className="h-20 w-20 object-cover rounded-xl border border-stone-200"
+                  />
+                  <button 
+                    onClick={() => setSelectedImages(prev => prev.filter((_, i) => i !== idx))}
+                    className="absolute -top-2 -right-2 bg-stone-900 text-white rounded-full p-1 shadow-md hover:bg-stone-700"
+                  >
+                    <X size={12} />
+                  </button>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
 
           <input 
             type="file" 
             ref={fileInputRef}
             accept="image/*"
+            multiple
             className="hidden"
             onChange={handleImageSelect}
           />
 
           <div className="flex items-center gap-3 w-full">
             <button 
-              onClick={() => setShowCameraMenu(!showCameraMenu)}
-              className={`p-2.5 rounded-full transition-colors ${showCameraMenu ? 'bg-stone-200 text-stone-900' : 'text-stone-400 hover:text-stone-700 hover:bg-stone-100'}`}
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2.5 rounded-full transition-colors text-stone-400 hover:text-stone-700 hover:bg-stone-100"
             >
               <Camera size={20} />
             </button>
 
             {inputMode === 'voice' ? (
-              selectedImage ? (
+              selectedImages.length > 0 ? (
                 <button
                   onClick={() => handleSend(undefined, true)}
                   disabled={isLoading}
                   className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full bg-stone-900 text-white active:bg-stone-700 transition-all disabled:opacity-50"
                 >
                   <Send size={20} />
-                  <span className="text-sm font-medium">{language === 'zh' ? '发送图片' : 'Send image'}</span>
+                  <span className="text-sm font-medium">{language === 'zh' ? `发送${selectedImages.length > 1 ? ` ${selectedImages.length} 张图片` : '图片'}` : `Send ${selectedImages.length > 1 ? `${selectedImages.length} images` : 'image'}`}</span>
                 </button>
               ) : (
                 <button
@@ -1611,7 +1588,7 @@ export default function Chat() {
                 />
                 <button 
                   onClick={() => handleSend(undefined, true)}
-                  disabled={(!input.trim() && !selectedImage) || isLoading}
+                  disabled={(!input.trim() && selectedImages.length === 0) || isLoading}
                   className="p-1.5 bg-stone-900 text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                 >
                   <Send size={16} />
@@ -1628,18 +1605,6 @@ export default function Chat() {
           </div>
         </div>
       </div>
-
-      {/* Camera Modal */}
-      {showCameraModal && (
-        <CameraCaptureModal 
-          isOpen={showCameraModal} 
-          onClose={() => {
-            setShowCameraModal(false);
-            setShowCameraMenu(false);
-          }}
-          onCapture={handleCameraCapture}
-        />
-      )}
 
       {/* Save Meal Plan Modal (for limit handling) */}
       {isSaveModalOpen && (
