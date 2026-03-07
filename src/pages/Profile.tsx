@@ -15,7 +15,7 @@ export default function Profile() {
   const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false);
   const isZh = language === 'zh';
   const text = {
-    basicInfo: isZh ? '基础信息' : 'Basic Info',
+    basicInfo: isZh ? '个人资料' : 'Profile',
     diet: isZh ? '饮食偏好' : 'Diet',
     cravings: isZh ? '饮食渴望' : 'Cravings',
     activityType: isZh ? '类型' : 'Type',
@@ -139,19 +139,6 @@ export default function Profile() {
 
   return (
     <div className="h-full overflow-y-auto px-4 pt-8 space-y-4 pb-6">
-      {/* User Header Card */}
-      <div className="w-full text-left bg-white rounded-2xl p-4 shadow-sm border border-stone-100">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-stone-100 rounded-full flex items-center justify-center text-lg">
-            👤
-          </div>
-          <div className="flex-1">
-            <div className="font-medium text-base">User</div>
-            <div className="text-stone-500 text-sm capitalize">{user.gender}, {user.age} {t.me.age}</div>
-          </div>
-        </div>
-      </div>
-
       {/* AI Advice Card */}
       {savedAdvice && (
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-stone-100">
@@ -181,13 +168,13 @@ export default function Profile() {
       {/* Basic Info Card */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-stone-100">
         <div className="flex items-center gap-2 mb-2">
-          <Target size={15} className="text-stone-400" />
+          <UserIcon size={15} className="text-stone-400" />
           <h2 className="font-serif text-base">{text.basicInfo}</h2>
         </div>
         <div className="space-y-1">
           <Row
-            label={isZh ? '身高' : 'Height'}
-            value={`${user.height} cm`}
+            label={isZh ? '性别 / 年龄 / 身高' : 'Gender / Age / Height'}
+            value={`${isZh ? (user.gender === 'female' ? '女' : user.gender === 'male' ? '男' : '其他') : user.gender} · ${user.age}${isZh ? '岁' : 'y'} · ${user.height}cm`}
             onClick={() => handleEdit('basic')}
           />
           <Row label={t.me.goal} value={
