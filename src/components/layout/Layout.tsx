@@ -8,15 +8,28 @@ function useKeyboardVisible() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-
-    const check = () => {
-      setVisible(window.innerHeight - vv.height > 100);
+    const isEditable = (el: EventTarget | null): boolean => {
+      if (!el || !(el instanceof HTMLElement)) return false;
+      if (el.isContentEditable) return true;
+      const tag = el.tagName;
+      return tag === 'TEXTAREA' || (tag === 'INPUT' && !['checkbox', 'radio', 'submit', 'button', 'file', 'hidden', 'range'].includes((el as HTMLInputElement).type));
     };
 
-    vv.addEventListener('resize', check);
-    return () => vv.removeEventListener('resize', check);
+    const onFocusIn = (e: FocusEvent) => {
+      if (isEditable(e.target)) setVisible(true);
+    };
+    const onFocusOut = () => {
+      setTimeout(() => {
+        if (!isEditable(document.activeElement)) setVisible(false);
+      }, 50);
+    };
+
+    document.addEventListener('focusin', onFocusIn);
+    document.addEventListener('focusout', onFocusOut);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('focusout', onFocusOut);
+    };
   }, []);
 
   return visible;
