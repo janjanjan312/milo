@@ -549,11 +549,8 @@ export default function Chat() {
       };
 
       const toMealType = (raw: any): MealItem['type'] => {
-        if (raw === 'breakfast' || raw === 'lunch' || raw === 'dinner' || raw === 'snack') return raw;
         const fromUserText = inferMealTypeFromText(combinedText);
         if (fromUserText) return fromUserText;
-        const fromAiText = inferMealTypeFromText(finalAiText);
-        if (fromAiText) return fromAiText;
         const hour = new Date().getHours();
         if (hour >= 5 && hour < 11) return 'breakfast';
         if (hour >= 11 && hour < 16) return 'lunch';

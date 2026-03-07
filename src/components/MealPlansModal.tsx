@@ -85,17 +85,31 @@ export default function MealPlansModal({ isOpen, onClose, initialPlan }: MealPla
 
             {/* Content */}
             {!selectedPlan ? (
-              <div className="overflow-y-auto p-5">
-                <div className="space-y-3">
-                  {allPlans.map(plan => (
-                    <SwipeablePlanItem 
-                      key={plan.id} 
-                      plan={plan} 
-                      onClick={() => setSelectedPlan(plan)}
-                      onDelete={() => deleteMealPlan(plan.id)}
-                    />
-                  ))}
-                </div>
+              <div className="overflow-y-auto p-5 min-h-[420px]">
+                {allPlans.length > 0 ? (
+                  <div className="space-y-3">
+                    {allPlans.map(plan => (
+                      <SwipeablePlanItem 
+                        key={plan.id} 
+                        plan={plan} 
+                        onClick={() => setSelectedPlan(plan)}
+                        onDelete={() => deleteMealPlan(plan.id)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full min-h-[360px] text-center">
+                    <div className="w-16 h-16 rounded-full bg-stone-100 flex items-center justify-center mb-4">
+                      <Bookmark size={28} className="text-stone-300" />
+                    </div>
+                    <p className="text-base font-medium text-stone-700 mb-2">
+                      {language === 'zh' ? '饮食计划待添加' : 'No meal plans yet'}
+                    </p>
+                    <p className="text-sm text-stone-400 max-w-[220px]">
+                      {language === 'zh' ? '请在对话页面中点击「生成计划」按钮' : 'Tap "Generate Plan" on the chat page to create one'}
+                    </p>
+                  </div>
+                )}
               </div>
             ) : (
               <>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp, UserProfile, WeightLog } from '../context/AppContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -261,6 +261,9 @@ export default function Profile() {
           </div>
         </button>
       </div>
+
+      {/* Font Size Card */}
+      <FontSizeSlider language={language} />
 
       {/* Edit Modal */}
       {createPortal(
@@ -667,5 +670,55 @@ function Row({
         <ChevronRight size={16} className="text-stone-300" />
       </div>
     </button>
+  );
+}
+
+function FontSizeSlider({ language }: { language: 'en' | 'zh' }) {
+  const isZh = language === 'zh';
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+  const defaultSize = isStandalone ? 18 : 16;
+  const [fontSize, setFontSize] = useState(() => {
+    const saved = localStorage.getItem('app_font_size');
+    return saved ? Number(saved) : defaultSize;
+  });
+
+  const handleChange = useCallback((value: number) => {
+    setFontSize(value);
+    localStorage.setItem('app_font_size', String(value));
+    document.documentElement.style.fontSize = `${value}px`;
+  }, []);
+
+  const handleReset = useCallback(() => {
+    handleChange(defaultSize);
+  }, [defaultSize, handleChange]);
+
+  return (
+    <div className="bg-white rounded-2xl p-4 shadow-sm border border-stone-100">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-stone-500 text-sm">{isZh ? '字体大小' : 'Font Size'}</span>
+        <button
+          onClick={handleReset}
+          className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
+        >
+          {isZh ? '恢复默认' : 'Reset'}
+        </button>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-stone-400 shrink-0">A</span>
+        <input
+          type="range"
+          min={14}
+          max={22}
+          step={1}
+          value={fontSize}
+          onChange={e => handleChange(Number(e.target.value))}
+          className="flex-1 accent-stone-900"
+        />
+        <span className="text-lg text-stone-400 shrink-0">A</span>
+      </div>
+      <div className="text-center mt-2">
+        <span className="text-xs text-stone-400">{fontSize}px</span>
+      </div>
+    </div>
   );
 }

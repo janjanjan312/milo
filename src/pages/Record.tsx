@@ -543,7 +543,14 @@ function MealCard({ id, title, items, onEdit, onRemove, emptyText }: {
 }) {
   return (
     <div id={id} className="scroll-mt-6">
-      <h3 className="font-serif text-xl font-medium text-stone-500 mb-3 tracking-tight">{title}</h3>
+      <div className="flex items-baseline justify-between mb-3">
+        <h3 className="font-serif text-xl font-medium text-stone-500 tracking-tight">{title}</h3>
+        {items.length > 0 && (
+          <span className="px-2.5 py-1 rounded-full bg-stone-100 text-xs font-medium text-stone-500">
+            {Math.round(items.reduce((sum, item) => sum + item.calories, 0))} kcal
+          </span>
+        )}
+      </div>
       
       <div className="bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden">
         {/* Column Headers */}

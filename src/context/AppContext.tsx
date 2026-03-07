@@ -292,7 +292,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Custom Meal Plans State
   const [customMealPlans, setCustomMealPlans] = useState<PlanTemplate[]>(() => {
-    return readJsonFromStorage<PlanTemplate[]>('customMealPlans', []);
+    const RETIRED_PRESET_IDS = ['plan_balanced', 'plan_low_carb', 'plan_high_protein'];
+    const saved = readJsonFromStorage<PlanTemplate[]>('customMealPlans', []);
+    const cleaned = saved.filter(p => !RETIRED_PRESET_IDS.includes(p.id));
+    if (cleaned.length !== saved.length) {
+      localStorage.setItem('customMealPlans', JSON.stringify(cleaned));
+    }
+    return cleaned;
   });
 
   const [deletedPlanIds, setDeletedPlanIds] = useState<string[]>(() => {
