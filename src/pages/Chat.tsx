@@ -40,7 +40,7 @@ export default function Chat() {
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const asrSessionRef = useRef<{ stop: () => Promise<string>; flush: () => Promise<string> } | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editableRef = useRef<HTMLDivElement>(null);
   const forcedSceneRef = useRef<InteractionScene | null>(null);
   const startedModeRef = useRef<InteractionScene | null>(null);
   const showQuickModeAfterReplyRef = useRef(false);
@@ -426,11 +426,20 @@ export default function Chat() {
     }
   }, [messages, isListening, selectedImages, interimInput]);
 
-  // Auto-resize textarea
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+    const el = editableRef.current;
+    if (!el) return;
+    const display = input + interimInput;
+    if (el.textContent !== display) {
+      el.textContent = display;
+      if (display) {
+        const sel = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(false);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      }
     }
   }, [input, interimInput]);
 
@@ -1566,12 +1575,14 @@ export default function Chat() {
               )
             ) : (
               <div className="flex-1 flex items-center gap-1.5 bg-stone-100 rounded-full px-3">
-                <textarea
-                  ref={textareaRef}
+                <div
+                  ref={editableRef}
+                  contentEditable
+                  role="textbox"
                   inputMode="text"
-                  value={input + interimInput}
-                  onChange={(e) => {
-                    setInput(e.target.value);
+                  onInput={() => {
+                    const text = editableRef.current?.textContent || '';
+                    setInput(text);
                     setInterimInput('');
                   }}
                   onKeyDown={(e) => {
@@ -1580,9 +1591,13 @@ export default function Chat() {
                       handleSend(undefined, true);
                     }
                   }}
-                  placeholder={t.chat.placeholder}
-                  rows={1}
-                  className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-stone-900 placeholder:text-stone-400 resize-none max-h-32 py-3"
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const text = e.clipboardData.getData('text/plain');
+                    document.execCommand('insertText', false, text);
+                  }}
+                  data-placeholder={t.chat.placeholder}
+                  className="flex-1 bg-transparent outline-none text-sm text-stone-900 py-3 max-h-32 overflow-y-auto break-all empty:before:content-[attr(data-placeholder)] empty:before:text-stone-400 empty:before:pointer-events-none"
                 />
                 <button 
                   onClick={() => handleSend(undefined, true)}

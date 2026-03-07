@@ -13,7 +13,9 @@ document.documentElement.style.fontSize = savedFontSize ? `${savedFontSize}px` :
 if (isStandalone) {
   document.addEventListener('touchend', (e) => {
     const el = e.target;
-    if (el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && el.type === 'text')) {
+    if (el instanceof HTMLElement && el.isContentEditable) {
+      el.focus();
+    } else if (el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && el.type === 'text')) {
       el.focus();
     }
   }, true);
