@@ -721,6 +721,50 @@ All values per 100g/100ml, 1 decimal place.`;
   }
 }
 
+export async function estimateNutritionByAI(
+  foodName: string,
+  language: 'en' | 'zh'
+): Promise<{ kcal: number; protein: number; fat: number; carbs: number; fiber: number } | null> {
+  const route = resolveRoute(false);
+  if (!route) return null;
+
+  const prompt = language === 'zh'
+    ? `你是营养学专家。请估算"${foodName}"每100克（或100毫升）的平均营养成分。
+对于混合食物请推理典型成分比例后计算加权平均。
+严格只输出一个 JSON 对象：{"kcal":0,"protein":0,"fat":0,"carbs":0,"fiber":0}
+所有数值保留1位小数。不要任何解释。`
+    : `You are a nutrition expert. Estimate per-100g (or per-100ml) average nutrition for "${foodName}".
+For mixed foods, reason about typical components and compute weighted averages.
+Output strict JSON only: {"kcal":0,"protein":0,"fat":0,"carbs":0,"fiber":0}
+All values 1 decimal place. No explanation.`;
+
+  try {
+    const payload = await requestChatCompletions(route.provider, {
+      model: route.model,
+      temperature: 0,
+      max_tokens: 256,
+      messages: [{ role: 'system', content: prompt }],
+    });
+
+    const text = extractTextFromQwenResponse(payload);
+    const result = parseJsonCandidate(text);
+    if (result && typeof result.kcal === 'number') {
+      addCustomFood({
+        foodName,
+        energyKCal: result.kcal,
+        protein: result.protein || 0,
+        fat: result.fat || 0,
+        carbs: result.carbs || 0,
+        dietaryFiber: result.fiber || 0,
+      });
+      return result;
+    }
+  } catch (error) {
+    console.warn('estimateNutritionByAI failed', error);
+  }
+  return null;
+}
+
 function parseMealLogFromText(text: string): MealLogPayload | undefined {
   if (!text) return undefined;
 

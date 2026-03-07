@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { translations } from '../translations';
 import { getMobilePortalTarget } from '../utils/portal';
 import { estimateNutritionFromDB } from '../services/foodDatabase';
+import { estimateNutritionByAI } from '../services/ai';
 
 interface AddFoodModalProps {
   isOpen: boolean;
@@ -61,6 +62,9 @@ export default function AddFoodModal({ isOpen, onClose, mealType, initialData, d
     setFat('');
     setMode('manual');
     setIsAnalyzing(false);
+    setAiEstimate(null);
+    setAiEstimating(false);
+    aiRequestRef.current = '';
   };
 
   const handleClose = () => {
@@ -88,39 +92,65 @@ export default function AddFoodModal({ isOpen, onClose, mealType, initialData, d
     }, 2000);
   };
 
+  const [aiEstimate, setAiEstimate] = useState<{ kcal: number; protein: number; fat: number; carbs: number; fiber: number } | null>(null);
+  const [aiEstimating, setAiEstimating] = useState(false);
+  const aiRequestRef = useRef<string>('');
+
+  useEffect(() => {
+    if (!name.trim()) {
+      setAiEstimate(null);
+      return;
+    }
+
+    const dbResult = estimateNutritionFromDB(name, 100, unit);
+    if (dbResult.matched) {
+      setAiEstimate(null);
+      return;
+    }
+
+    const key = `${name}::${unit}`;
+    if (aiRequestRef.current === key) return;
+    aiRequestRef.current = key;
+
+    const timer = setTimeout(() => {
+      setAiEstimating(true);
+      estimateNutritionByAI(name, language).then(result => {
+        if (aiRequestRef.current === key) {
+          setAiEstimate(result);
+          setAiEstimating(false);
+        }
+      }).catch(() => {
+        if (aiRequestRef.current === key) setAiEstimating(false);
+      });
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [name, unit, language]);
+
   const estimateNutrition = (name: string, amount: string) => {
     const amt = Number(amount) || 100;
 
     const dbResult = estimateNutritionFromDB(name, amt, unit);
-    if (dbResult.matched) {
-      return dbResult;
+    if (dbResult.matched) return dbResult;
+
+    if (aiEstimate) {
+      const factor = amt / 100;
+      let category: FoodCategory = 'Carb';
+      if (aiEstimate.protein >= aiEstimate.carbs && aiEstimate.protein >= aiEstimate.fat) category = 'Prot';
+      else if (aiEstimate.fat >= aiEstimate.protein && aiEstimate.fat >= aiEstimate.carbs) category = 'Fat';
+      if (aiEstimate.kcal < 50 && aiEstimate.fiber > 1) category = 'Veg';
+
+      return {
+        calories: Math.round(aiEstimate.kcal * factor),
+        protein: Math.round(aiEstimate.protein * factor * 10) / 10,
+        carbs: Math.round(aiEstimate.carbs * factor * 10) / 10,
+        fat: Math.round(aiEstimate.fat * factor * 10) / 10,
+        category,
+        matched: true,
+      };
     }
 
-    const factor = amt / 100;
-    let base = { calories: 150, protein: 10, carbs: 15, fat: 5, category: 'Carb' as FoodCategory };
-
-    const lowerName = name.toLowerCase();
-    if (lowerName.includes('chicken') || lowerName.includes('beef') || lowerName.includes('fish') || lowerName.includes('egg') ||
-        lowerName.includes('鸡') || lowerName.includes('牛') || lowerName.includes('鱼') || lowerName.includes('蛋')) {
-      base = { calories: 165, protein: 31, carbs: 0, fat: 3.6, category: 'Prot' };
-    } else if (lowerName.includes('rice') || lowerName.includes('bread') || lowerName.includes('pasta') || lowerName.includes('potato') ||
-               lowerName.includes('米') || lowerName.includes('面') || lowerName.includes('馒头') || lowerName.includes('土豆')) {
-      base = { calories: 130, protein: 2.7, carbs: 28, fat: 0.3, category: 'Carb' };
-    } else if (lowerName.includes('salad') || lowerName.includes('vegetable') || lowerName.includes('broccoli') ||
-               lowerName.includes('菜') || lowerName.includes('蔬') || lowerName.includes('生菜')) {
-      base = { calories: 35, protein: 2, carbs: 5, fat: 0.2, category: 'Veg' };
-    } else if (lowerName.includes('oil') || lowerName.includes('nut') || lowerName.includes('avocado') ||
-               lowerName.includes('油') || lowerName.includes('坚果') || lowerName.includes('牛油果')) {
-      base = { calories: 600, protein: 15, carbs: 10, fat: 55, category: 'Fat' };
-    }
-
-    return {
-      calories: Math.round(base.calories * factor),
-      protein: Math.round(base.protein * factor),
-      carbs: Math.round(base.carbs * factor),
-      fat: Math.round(base.fat * factor),
-      category: base.category,
-    };
+    return { calories: 0, protein: 0, carbs: 0, fat: 0, category: 'Carb' as FoodCategory, matched: false };
   };
 
   const handleSubmit = (e: FormEvent) => {
@@ -296,32 +326,54 @@ export default function AddFoodModal({ isOpen, onClose, mealType, initialData, d
                   </div>
 
                   {/* Auto-calculated Info Preview */}
-                  {(name || amount) && (
-                    <div className="bg-stone-50 rounded-xl p-4 border border-stone-100">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-2 h-2 rounded-full bg-stone-900 animate-pulse" />
-                        <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">{t.addFood.estimate}</span>
+                  {(name || amount) && (() => {
+                    const est = estimateNutrition(name, amount);
+                    const showValues = est.matched || (!aiEstimating && (est.calories > 0));
+                    return (
+                      <div className="bg-stone-50 rounded-xl p-4 border border-stone-100">
+                        <div className="flex items-center gap-2 mb-3">
+                          {aiEstimating ? (
+                            <Loader2 size={14} className="text-stone-500 animate-spin" />
+                          ) : (
+                            <div className="w-2 h-2 rounded-full bg-stone-900" />
+                          )}
+                          <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">
+                            {aiEstimating
+                              ? (language === 'zh' ? 'AI 估算中…' : 'AI estimating…')
+                              : t.addFood.estimate}
+                          </span>
+                        </div>
+                        {showValues ? (
+                          <div className="grid grid-cols-4 gap-2 text-center">
+                            <div>
+                              <div className="text-lg font-bold text-stone-900">{est.calories}</div>
+                              <div className="text-[10px] text-stone-400 font-bold uppercase">{t.record.calories}</div>
+                            </div>
+                            <div>
+                              <div className="text-lg font-bold text-stone-900">{est.protein}</div>
+                              <div className="text-[10px] text-stone-400 font-bold uppercase">{t.record.protein}</div>
+                            </div>
+                            <div>
+                              <div className="text-lg font-bold text-amber-600">{est.carbs}</div>
+                              <div className="text-[10px] text-stone-400 font-bold uppercase">{t.record.carbs}</div>
+                            </div>
+                            <div>
+                              <div className="text-lg font-bold text-red-600">{est.fat}</div>
+                              <div className="text-[10px] text-stone-400 font-bold uppercase">{t.record.fat}</div>
+                            </div>
+                          </div>
+                        ) : aiEstimating ? (
+                          <div className="text-center text-sm text-stone-400 py-2">
+                            {language === 'zh' ? '正在查询营养数据…' : 'Looking up nutrition data…'}
+                          </div>
+                        ) : (
+                          <div className="text-center text-sm text-stone-400 py-2">
+                            {language === 'zh' ? '未找到营养数据' : 'No nutrition data found'}
+                          </div>
+                        )}
                       </div>
-                      <div className="grid grid-cols-4 gap-2 text-center">
-                        <div>
-                          <div className="text-lg font-bold text-stone-900">{estimateNutrition(name, amount).calories}</div>
-                          <div className="text-[10px] text-stone-400 font-bold uppercase">{t.record.calories}</div>
-                        </div>
-                        <div>
-                          <div className="text-lg font-bold text-stone-900">{estimateNutrition(name, amount).protein}</div>
-                          <div className="text-[10px] text-stone-400 font-bold uppercase">{t.record.protein}</div>
-                        </div>
-                        <div>
-                          <div className="text-lg font-bold text-amber-600">{estimateNutrition(name, amount).carbs}</div>
-                          <div className="text-[10px] text-stone-400 font-bold uppercase">{t.record.carbs}</div>
-                        </div>
-                        <div>
-                          <div className="text-lg font-bold text-red-600">{estimateNutrition(name, amount).fat}</div>
-                          <div className="text-[10px] text-stone-400 font-bold uppercase">{t.record.fat}</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   <button
                     type="submit"
