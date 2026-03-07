@@ -66,12 +66,15 @@ export default function Chat() {
   const switchInputMode = (mode: 'voice' | 'text') => {
     setInputMode(mode);
     localStorage.setItem('diet_input_mode', mode);
-    if (mode === 'text' && (isListening || isStartingListening)) {
-      asrSessionRef.current?.stop();
-      asrSessionRef.current = null;
-      setIsListening(false);
-      setIsStartingListening(false);
-      setInterimInput('');
+    if (mode === 'text') {
+      if (isListening || isStartingListening) {
+        asrSessionRef.current?.stop();
+        asrSessionRef.current = null;
+        setIsListening(false);
+        setIsStartingListening(false);
+        setInterimInput('');
+      }
+      setTimeout(() => textareaRef.current?.focus(), 50);
     }
   };
 
@@ -1581,7 +1584,10 @@ export default function Chat() {
                   }}
                   placeholder={t.chat.placeholder}
                   rows={1}
-                  className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-stone-900 placeholder:text-stone-400 resize-none max-h-32 py-3"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  className="flex-1 bg-transparent border-none focus:ring-0 text-base text-stone-900 placeholder:text-stone-400 resize-none max-h-32 py-3"
+                  style={{ fontSize: 'max(1rem, 16px)' }}
                 />
                 <button 
                   onClick={() => handleSend(undefined, true)}
