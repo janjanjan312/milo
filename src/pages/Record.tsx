@@ -325,7 +325,7 @@ export default function Record() {
             return (
               <div key={item.name} className="flex flex-col items-center">
                 <div className="relative w-20 h-20 flex items-center justify-center mb-2">
-                  <svg className="w-full h-full transform -rotate-90">
+                  <svg viewBox="0 0 80 80" className="w-full h-full transform -rotate-90">
                     <circle
                       cx="40"
                       cy="40"

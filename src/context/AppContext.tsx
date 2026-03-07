@@ -209,85 +209,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return stored as UserProfile | null;
   });
 
-  // MOCK DATA FOR VISUALIZATION
-  const MOCK_MEAL_PLAN: MealPlan = {
-    breakfast: [
-      { id: 'b1', category: 'Prot', name: 'Milk, regular', serving: 250, unit: 'ml', protein: 8.5, carbs: 12, fat: 8, calories: 154 },
-      { id: 'b2', category: 'Carb', name: 'Croissant (plain)', serving: 60, unit: 'g', protein: 5, carbs: 27.5, fat: 12.6, calories: 243 },
-    ],
-    lunch: [],
-    dinner: [
-      { id: 'd1', category: 'Prot', name: 'Chicken breast, cooked', serving: 100, unit: 'g', protein: 31, carbs: 0, fat: 3.6, calories: 156.4 },
-      { id: 'd2', category: 'Veg', name: 'Roasted vegetables', serving: 200, unit: 'g', protein: 3.39, carbs: 15.31, fat: 0.46, calories: 78.9 },
-      { id: 'd3', category: 'Carb', name: 'Corn, sweet (cooked)', serving: 150, unit: 'g', protein: 5.1, carbs: 31.5, fat: 2.3, calories: 167.1 },
-    ],
-    snack: [
-      { id: 's1', category: 'Prot', name: 'Greek yogurt, plain', serving: 250, unit: 'g', protein: 25, carbs: 9, fat: 2, calories: 154 },
-      { id: 's2', category: 'Carb', name: 'Orange', serving: 85, unit: 'g', protein: 0.8, carbs: 10, fat: 0.1, calories: 44.1 },
-      { id: 's3', category: 'Prot', name: 'Milk, regular', serving: 200, unit: 'ml', protein: 6.8, carbs: 9.6, fat: 6.4, calories: 123.2 },
-    ],
-    isOptimized: true
-  };
-
   const [mealPlan, setMealPlan] = useState<MealPlan | null>(() => {
-    return readJsonFromStorage<MealPlan | null>('mealPlan', MOCK_MEAL_PLAN);
+    return readJsonFromStorage<MealPlan | null>('mealPlan', null);
   });
-  
-  // Initialize dailyLogs from localStorage or default to mock data
+
   const [dailyLogs, setDailyLogs] = useState<MealItem[]>(() => {
-    const saved = readJsonFromStorage<MealItem[] | null>('dailyLogs', null);
-    if (saved) {
-      return saved;
-    }
-
-    // Default mock data if no local storage
-    const logs: MealItem[] = [];
-    const add = (items: PlanFoodItem[], type: MealItem['type']) => {
-      items.forEach(item => {
-        logs.push({
-          id: uuidv4(),
-          planId: item.id,
-          name: item.name,
-          calories: item.calories,
-          protein: item.protein,
-          carbs: item.carbs,
-          fat: item.fat,
-          veggie: item.category === 'Veg' ? item.serving : 0,
-          type: type as any,
-          timestamp: Date.now(),
-          category: item.category,
-          serving: item.serving,
-          unit: item.unit
-        });
-      });
-    };
-    
-    // Only populate mock data if we really want to simulate a fresh start with data
-    // For now, let's keep the mock data logic as a fallback
-    const MOCK_MEAL_PLAN_DATA: MealPlan = {
-      breakfast: [
-        { id: 'b1', category: 'Prot', name: 'Milk, regular', serving: 250, unit: 'ml', protein: 8.5, carbs: 12, fat: 8, calories: 154 },
-        { id: 'b2', category: 'Carb', name: 'Croissant (plain)', serving: 60, unit: 'g', protein: 5, carbs: 27.5, fat: 12.6, calories: 243 },
-      ],
-      lunch: [],
-      dinner: [
-        { id: 'd1', category: 'Prot', name: 'Chicken breast, cooked', serving: 100, unit: 'g', protein: 31, carbs: 0, fat: 3.6, calories: 156.4 },
-        { id: 'd2', category: 'Veg', name: 'Roasted vegetables', serving: 200, unit: 'g', protein: 3.39, carbs: 15.31, fat: 0.46, calories: 78.9 },
-        { id: 'd3', category: 'Carb', name: 'Corn, sweet (cooked)', serving: 150, unit: 'g', protein: 5.1, carbs: 31.5, fat: 2.3, calories: 167.1 },
-      ],
-      snack: [
-        { id: 's1', category: 'Prot', name: 'Greek yogurt, plain', serving: 250, unit: 'g', protein: 25, carbs: 9, fat: 2, calories: 154 },
-        { id: 's2', category: 'Carb', name: 'Orange', serving: 85, unit: 'g', protein: 0.8, carbs: 10, fat: 0.1, calories: 44.1 },
-        { id: 's3', category: 'Prot', name: 'Milk, regular', serving: 200, unit: 'ml', protein: 6.8, carbs: 9.6, fat: 6.4, calories: 123.2 },
-      ],
-      isOptimized: true
-    };
-
-    add(MOCK_MEAL_PLAN_DATA.breakfast, 'breakfast');
-    add(MOCK_MEAL_PLAN_DATA.dinner, 'dinner');
-    add(MOCK_MEAL_PLAN_DATA.snack, 'snack');
-    
-    return logs;
+    return readJsonFromStorage<MealItem[]>('dailyLogs', []);
   });
 
   // Custom Meal Plans State
