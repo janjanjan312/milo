@@ -1571,6 +1571,7 @@ export default function Chat() {
               >
                 <textarea
                   ref={textareaRef}
+                  inputMode="text"
                   value={input + interimInput}
                   onChange={(e) => {
                     setInput(e.target.value);

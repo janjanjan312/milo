@@ -18,13 +18,13 @@ function PersistentTabs() {
 
   return (
     <Layout>
-      <div style={{ display: path === '/chat' ? 'contents' : 'none' }}>
+      <div className={path === '/chat' ? 'h-full' : 'hidden'}>
         <Chat />
       </div>
-      <div style={{ display: path === '/record' ? 'contents' : 'none' }}>
+      <div className={path === '/record' ? 'h-full' : 'hidden'}>
         <Record />
       </div>
-      <div style={{ display: path === '/me' ? 'contents' : 'none' }}>
+      <div className={path === '/me' ? 'h-full' : 'hidden'}>
         <Profile />
       </div>
     </Layout>
