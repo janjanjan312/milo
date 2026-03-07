@@ -204,7 +204,7 @@ export default defineConfig(({mode}) => {
           name: '麦粒',
           short_name: '麦粒',
           description: 'AI 智能饮食记录与分析助手',
-          theme_color: '#FAFAF9',
+          theme_color: '#FFFFFF',
           background_color: '#FAFAF9',
           display: 'standalone',
           scope: '/',

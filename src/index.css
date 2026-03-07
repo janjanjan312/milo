@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+@media all and (display-mode: standalone) {
+  html {
+    font-size: 17px;
+  }
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }

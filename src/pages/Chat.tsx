@@ -513,7 +513,7 @@ export default function Chat() {
       }
       const hasMealContext = hasConcreteMealContext(combinedText, currentImage);
       const imageAutoRecord = Boolean(currentImage) && interactionScene === 'meal_estimate';
-      let shouldAttemptRecord = !forcedScene
+      let shouldAttemptRecord = (!forcedScene || forcedScene === 'meal_estimate')
         && (imageAutoRecord || ((hasExplicitRecordIntent || hasReportedMealIntake) && hasMealContext));
 
       const mainReplyStartMs = getNowMs();
@@ -833,7 +833,7 @@ export default function Chat() {
             text: mergedText,
           },
         ]);
-        if (interactionScene === 'meal_estimate' && hasRecordedMeal) {
+        if (interactionScene === 'meal_estimate') {
           setShowQuickModeButtons(true);
         }
       } else {
@@ -860,6 +860,9 @@ export default function Chat() {
           setShowQuickModeButtons(true);
         }
         if (interactionScene === 'record_analysis') {
+          setShowQuickModeButtons(true);
+        }
+        if (interactionScene === 'meal_estimate') {
           setShowQuickModeButtons(true);
         }
       }
