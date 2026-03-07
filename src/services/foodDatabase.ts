@@ -360,11 +360,17 @@ export function estimateNutritionFromDB(name: string, serving: number, unit = 'g
     return { calories: 0, protein: 0, carbs: 0, fat: 0, category: 'Carb', matched: false };
   }
 
+  const per100gCal = servingG > 0 ? (result.calories / servingG) * 100 : result.calories;
+  const per100gFiber = servingG > 0 ? (result.dietaryFiber / servingG) * 100 : result.dietaryFiber;
+
   let category: 'Prot' | 'Veg' | 'Carb' | 'Fat' = 'Carb';
-  if (result.protein >= result.carbs && result.protein >= result.fat) category = 'Prot';
-  else if (result.fat >= result.protein && result.fat >= result.carbs) category = 'Fat';
-  else if (result.carbs >= result.protein && result.carbs >= result.fat) category = 'Carb';
-  if (result.calories < 50 && result.dietaryFiber > 1) category = 'Veg';
+  if (per100gCal < 50 && per100gFiber > 1) {
+    category = 'Veg';
+  } else if (result.protein >= result.carbs && result.protein >= result.fat) {
+    category = 'Prot';
+  } else if (result.fat >= result.protein && result.fat >= result.carbs) {
+    category = 'Fat';
+  }
 
   return {
     calories: result.calories,

@@ -263,11 +263,23 @@ export default function Chat() {
       .test(normalized);
   };
 
+  const isBareReportPattern = (text: string): boolean => {
+    const compact = text.replace(/[\s，,。.!！?？~～·''"""/]/g, '').trim();
+    if (!compact || compact.length < 2) return false;
+    const foodUnits = '克|g|毫升|ml|碗|杯|个|块|片|份|盒|瓶|袋|根|条|只|颗|勺|两|斤';
+    const cnNums = '[零一二三四五六七八九十百千两半几\\d]+';
+    const foodWithQty = new RegExp(`[\\u4e00-\\u9fff]{1,}\\s?(?:${cnNums})\\s*(?:${foodUnits})`, 'i');
+    const qtyWithFood = new RegExp(`(?:${cnNums})\\s*(?:${foodUnits})(?:的?\\s*)?[\\u4e00-\\u9fff]+`, 'i');
+    const engPattern = /\d+\s*(?:g|ml|oz|cups?|pieces?|slices?|servings?|bowls?)\s+\w+|\w+\s+\d+\s*(?:g|ml|oz)\b/i;
+    return foodWithQty.test(compact) || qtyWithFood.test(compact) || engPattern.test(compact);
+  };
+
   const hasMealReportIntent = (text: string) => {
     const normalized = (text || '').trim().toLowerCase();
     if (!normalized) return false;
-    return /(我刚吃了|刚吃了|我吃了|今天吃了|刚刚吃了|吃了个|还吃了|又吃了|另外吃了|还喝了|又喝了|另外喝了|我喝了|今天喝了|ate|just ate|i had|had for|also had|also ate|also drank|(?:^|[\s，。！？,.!?])(吃了|喝了)(?:$|[\s，。！？,.!?]))/i
-      .test(normalized);
+    if (/(我刚吃了|刚吃了|我吃了|今天吃了|刚刚吃了|吃了个|还吃了|又吃了|另外吃了|还喝了|又喝了|另外喝了|我喝了|今天喝了|ate|just ate|i had|had for|also had|also ate|also drank|(?:^|[\s，。！？,.!?])(吃了|喝了)(?:$|[\s，。！？,.!?]))/i
+      .test(normalized)) return true;
+    return isBareReportPattern(normalized);
   };
 
   const hasConcreteMealContext = (text: string, image?: string | null) => {
@@ -522,7 +534,7 @@ export default function Chat() {
       const hasMealContext = hasConcreteMealContext(combinedText, currentImage);
       const imageAutoRecord = Boolean(currentImage) && interactionScene === 'meal_estimate';
       let shouldAttemptRecord = (!forcedScene || forcedScene === 'meal_estimate')
-        && (imageAutoRecord || forcedScene === 'meal_estimate' || ((hasExplicitRecordIntent || hasReportedMealIntake) && hasMealContext));
+        && (imageAutoRecord || forcedScene === 'meal_estimate' || hasExplicitRecordIntent || (hasReportedMealIntake && hasMealContext));
 
       const mainReplyStartMs = getNowMs();
       const { text, mealPlan, correctedUserText, suggestions, mealLog } = await sendMessageToAI(
@@ -641,7 +653,10 @@ export default function Chat() {
           .slice(0, 5);
         if (bulletLines.length >= 2) {
           setSavedAdvice(JSON.stringify(bulletLines));
-          if (aiSuggestions.length === 0 && !mealPlan) {
+          const isDietAdvice = bulletLines.some(l =>
+            /(建议|推荐|调整|搭配|减少|增加|替换|补充|摄入|控制|改为|换成|避免|改善|优化|蛋白|碳水|脂肪|热量|营养|蔬菜|水果|纤维|维生素|suggest|recommend|replace|reduce|increase|intake|protein|carb|fat|calorie|nutriti|vegetable|fiber)/i.test(l)
+          );
+          if (isDietAdvice && aiSuggestions.length === 0 && !mealPlan && !hasPlanDraftInText(finalAiText)) {
             aiSuggestions = language === 'zh'
               ? ['生成完整饮食计划', '先不用了']
               : ['Generate full meal plan', 'Not now'];
@@ -887,6 +902,16 @@ export default function Chat() {
 
     } catch (e) {
       console.error(e);
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'model',
+          text: language === 'zh'
+            ? '抱歉，处理时出了点问题，请再试一次。'
+            : 'Sorry, something went wrong. Please try again.',
+        },
+      ]);
+      setShowQuickModeButtons(true);
     } finally {
       setIsLoading(false);
       if (showQuickModeAfterReplyRef.current) {

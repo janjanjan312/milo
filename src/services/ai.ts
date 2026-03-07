@@ -332,70 +332,115 @@ function extractTextFromQwenResponse(payload: any): string {
   return '';
 }
 
-async function requestQwen(path: string, body: any) {
-  const startMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+const AI_REQUEST_TIMEOUT_MS = 60_000;
+const AI_MAX_RETRIES = 2;
+const AI_RETRY_BASE_DELAY_MS = 1000;
+
+function isRetryableError(error: any): boolean {
+  if (!error) return false;
+  const msg = String(error.message || error).toLowerCase();
+  return (
+    msg.includes('load failed') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('networkerror') ||
+    msg.includes('network request failed') ||
+    msg.includes('aborted') ||
+    msg.includes('timeout')
+  );
+}
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number = AI_REQUEST_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`请求超时（${Math.round(timeoutMs / 1000)}s）`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function requestWithRetry(
+  provider: 'qwen' | 'ark',
+  baseUrl: string,
+  apiKey: string,
+  path: string,
+  body: any,
+): Promise<any> {
   const model = body?.model || 'unknown-model';
-  const response = await fetch(`${DASHSCOPE_BASE_URL}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${dashscopeApiKey}`,
-    },
-    body: JSON.stringify(body),
-  });
+  let lastError: Error | undefined;
 
-  const payload = await response.json().catch(() => ({}));
-  const elapsedMs = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startMs);
+  for (let attempt = 0; attempt <= AI_MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delay = AI_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+      console.info(`[ai-retry] ${provider} attempt ${attempt + 1}/${AI_MAX_RETRIES + 1} after ${delay}ms`);
+      await new Promise(r => setTimeout(r, delay));
+    }
 
-  if (ENABLE_AI_LATENCY_LOG) {
-    console.info('[ai-latency]', {
-      provider: 'qwen',
-      path,
-      model,
-      status: response.status,
-      ok: response.ok,
-      elapsedMs,
-    });
+    const startMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    try {
+      const response = await fetchWithTimeout(`${baseUrl}${path}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      const elapsedMs = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startMs);
+
+      if (ENABLE_AI_LATENCY_LOG) {
+        console.info('[ai-latency]', {
+          provider,
+          path,
+          model,
+          status: response.status,
+          ok: response.ok,
+          elapsedMs,
+          attempt: attempt + 1,
+        });
+      }
+
+      if (!response.ok) {
+        const message = payload?.error?.message || payload?.message || `HTTP ${response.status}`;
+        const err = new Error(message);
+        if (response.status >= 500 && attempt < AI_MAX_RETRIES) {
+          lastError = err;
+          continue;
+        }
+        throw err;
+      }
+      return payload;
+    } catch (error: any) {
+      const elapsedMs = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startMs);
+      if (ENABLE_AI_LATENCY_LOG) {
+        console.warn('[ai-latency] request failed', { provider, path, model, elapsedMs, attempt: attempt + 1, error: error?.message });
+      }
+      lastError = error;
+      if (!isRetryableError(error) || attempt >= AI_MAX_RETRIES) {
+        throw error;
+      }
+    }
   }
+  throw lastError || new Error('Request failed after retries');
+}
 
-  if (!response.ok) {
-    const message = payload?.error?.message || payload?.message || `HTTP ${response.status}`;
-    throw new Error(message);
-  }
-  return payload;
+async function requestQwen(path: string, body: any) {
+  return requestWithRetry('qwen', DASHSCOPE_BASE_URL, dashscopeApiKey, path, body);
 }
 
 async function requestArk(path: string, body: any) {
-  const startMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
-  const model = body?.model || 'unknown-model';
-  const response = await fetch(`${ARK_BASE_URL}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${arkApiKey}`,
-    },
-    body: JSON.stringify(body),
-  });
-
-  const payload = await response.json().catch(() => ({}));
-  const elapsedMs = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startMs);
-
-  if (ENABLE_AI_LATENCY_LOG) {
-    console.info('[ai-latency]', {
-      provider: 'ark',
-      path,
-      model,
-      status: response.status,
-      ok: response.ok,
-      elapsedMs,
-    });
-  }
-
-  if (!response.ok) {
-    const message = payload?.error?.message || payload?.message || `HTTP ${response.status}`;
-    throw new Error(message);
-  }
-  return payload;
+  return requestWithRetry('ark', ARK_BASE_URL, arkApiKey, path, body);
 }
 
 async function requestChatCompletions(provider: Provider, body: any) {
@@ -471,7 +516,7 @@ export async function detectInteractionIntent(params: {
 - meal_estimate: 单餐/单个食物识别、营养估算、吃了什么。
 - diet_coaching: 饮食教练连续流程（信息收集→分析→计划生成）。
 - record_analysis: 对每日/每周已有饮食记录做阶段性回顾分析。
-- recordIntent=true: 用户希望把这次进食写入记录（即使说法很口语，如“喝了酸奶”“记一下这个”）。
+- recordIntent=true: 用户希望记录进食。这是饮食记录App，以下都视为recordIntent=true：说了吃了/喝了(如喝了酸奶)；只说食物名(如酸奶、鸡蛋、苹果)等同于报告进食；食物+份量(如酸奶150克)；要求记录(如记一下)。
 输入上下文：
 user="${userText}"
 hasImage=${hasImage ? 'true' : 'false'}
@@ -483,7 +528,7 @@ Rules:
 - meal_estimate: single meal/food estimate.
 - diet_coaching: coaching flow (collect -> analyze -> plan generation).
 - record_analysis: periodic analysis for existing daily/weekly records.
-- recordIntent=true when user wants this intake logged, even colloquial wording.
+- recordIntent=true: user wants intake logged. This is a food tracking app, so ALL imply recordIntent=true: eating phrases (ate yogurt); bare food names (yogurt, eggs, apple) = reporting intake; food+quantity (yogurt 150g); record requests (log this).
 Context:
 user="${userText}"
 hasImage=${hasImage ? 'true' : 'false'}
