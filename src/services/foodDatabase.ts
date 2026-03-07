@@ -182,7 +182,14 @@ export function searchFoodWithScore(query: string, limit = 5): ScoredFoodItem[] 
       if (q.length <= 2) score -= 20;
     }
 
-    if (item.foodName.includes('代表值') && score > 0) score += 3;
+    if (item.foodName.includes('代表值') && score > 0) score += 5;
+
+    const processedTerms = ['脱水', '干制', '冻干', '腌制', '油炸', '罐头', '粉状'];
+    for (const term of processedTerms) {
+      if (item.foodName.includes(term) && !cleanQuery.includes(term)) {
+        score -= 30;
+      }
+    }
 
     if (score > 30) {
       scored.push({ item, score });
