@@ -172,7 +172,7 @@ export default function Record() {
       : (language === 'zh' ? '还没有记录食物' : 'No food logged yet');
 
   return (
-    <div className="p-5 md:p-8 space-y-11">
+    <div className="h-full overflow-y-auto p-5 md:p-8 space-y-11">
       {/* Header & Stats */}
       <div>
         <header className="mb-8 flex items-center justify-between h-10">

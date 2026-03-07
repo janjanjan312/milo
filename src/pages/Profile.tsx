@@ -138,7 +138,7 @@ export default function Profile() {
   };
 
   return (
-    <div className="px-4 pt-8 space-y-4 pb-6">
+    <div className="h-full overflow-y-auto px-4 pt-8 space-y-4 pb-6">
       {/* User Header Card */}
       <div className="w-full text-left bg-white rounded-2xl p-4 shadow-sm border border-stone-100">
         <div className="flex items-center gap-4">
