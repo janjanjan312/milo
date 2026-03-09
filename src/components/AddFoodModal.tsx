@@ -64,6 +64,8 @@ export default function AddFoodModal({ isOpen, onClose, mealType, initialData, d
     setIsAnalyzing(false);
     setAiEstimate(null);
     setAiEstimating(false);
+    setAiFailed(false);
+    aiAbortRef.current?.abort();
     aiRequestRef.current = '';
   };
 
@@ -94,38 +96,61 @@ export default function AddFoodModal({ isOpen, onClose, mealType, initialData, d
 
   const [aiEstimate, setAiEstimate] = useState<{ kcal: number; protein: number; fat: number; carbs: number; fiber: number } | null>(null);
   const [aiEstimating, setAiEstimating] = useState(false);
+  const [aiFailed, setAiFailed] = useState(false);
   const aiRequestRef = useRef<string>('');
+  const aiAbortRef = useRef<AbortController | null>(null);
+
+  const triggerAiEstimate = (foodName: string, foodUnit: string, lang: 'en' | 'zh') => {
+    aiAbortRef.current?.abort();
+    const ac = new AbortController();
+    aiAbortRef.current = ac;
+    const key = `${foodName}::${foodUnit}`;
+    aiRequestRef.current = key;
+
+    setAiEstimating(true);
+    setAiFailed(false);
+    estimateNutritionByAI(foodName, lang, ac.signal).then(result => {
+      if (aiRequestRef.current === key && !ac.signal.aborted) {
+        setAiEstimate(result);
+        setAiEstimating(false);
+        setAiFailed(!result);
+      }
+    }).catch((err) => {
+      if (err?.name === 'AbortError') return;
+      if (aiRequestRef.current === key) {
+        setAiEstimating(false);
+        setAiFailed(true);
+      }
+    });
+  };
 
   useEffect(() => {
     if (!name.trim()) {
       setAiEstimate(null);
+      setAiFailed(false);
       return;
     }
 
     const dbResult = estimateNutritionFromDB(name, 100, unit);
     if (dbResult.matched) {
       setAiEstimate(null);
+      setAiFailed(false);
       return;
     }
 
     const key = `${name}::${unit}`;
     if (aiRequestRef.current === key) return;
-    aiRequestRef.current = key;
 
-    const timer = setTimeout(() => {
-      setAiEstimating(true);
-      estimateNutritionByAI(name, language).then(result => {
-        if (aiRequestRef.current === key) {
-          setAiEstimate(result);
-          setAiEstimating(false);
-        }
-      }).catch(() => {
-        if (aiRequestRef.current === key) setAiEstimating(false);
-      });
-    }, 600);
+    const timer = setTimeout(() => triggerAiEstimate(name, unit, language), 300);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [name, unit, language]);
+
+  useEffect(() => {
+    return () => { aiAbortRef.current?.abort(); };
+  }, []);
 
   const estimateNutrition = (name: string, amount: string) => {
     const amt = Number(amount) || 100;
@@ -363,8 +388,26 @@ export default function AddFoodModal({ isOpen, onClose, mealType, initialData, d
                             </div>
                           </div>
                         ) : aiEstimating ? (
-                          <div className="text-center text-sm text-stone-400 py-2">
-                            {language === 'zh' ? '正在查询营养数据…' : 'Looking up nutrition data…'}
+                          <div className="grid grid-cols-4 gap-2 text-center animate-pulse">
+                            {[t.record.calories, t.record.protein, t.record.carbs, t.record.fat].map((label) => (
+                              <div key={label}>
+                                <div className="h-6 w-10 mx-auto bg-stone-200 rounded mb-1" />
+                                <div className="text-[10px] text-stone-400 font-bold uppercase">{label}</div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : aiFailed ? (
+                          <div className="text-center py-2 flex flex-col items-center gap-1">
+                            <span className="text-sm text-stone-400">
+                              {language === 'zh' ? '查询失败，请重试' : 'Query failed, please retry'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => triggerAiEstimate(name, unit, language)}
+                              className="text-xs text-stone-600 underline underline-offset-2"
+                            >
+                              {language === 'zh' ? '重新查询' : 'Retry'}
+                            </button>
                           </div>
                         ) : (
                           <div className="text-center text-sm text-stone-400 py-2">

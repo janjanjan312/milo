@@ -353,18 +353,23 @@ async function fetchWithTimeout(
   url: string,
   init: RequestInit,
   timeoutMs: number = AI_REQUEST_TIMEOUT_MS,
+  externalSignal?: AbortSignal,
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const onExternalAbort = () => controller.abort();
+  externalSignal?.addEventListener('abort', onExternalAbort);
   try {
     return await fetch(url, { ...init, signal: controller.signal });
   } catch (error: any) {
     if (error?.name === 'AbortError') {
+      if (externalSignal?.aborted) throw new DOMException('Aborted', 'AbortError');
       throw new Error(`请求超时（${Math.round(timeoutMs / 1000)}s）`);
     }
     throw error;
   } finally {
     clearTimeout(timer);
+    externalSignal?.removeEventListener('abort', onExternalAbort);
   }
 }
 
@@ -374,14 +379,19 @@ async function requestWithRetry(
   apiKey: string,
   path: string,
   body: any,
+  options?: { signal?: AbortSignal; timeoutMs?: number; maxRetries?: number },
 ): Promise<any> {
   const model = body?.model || 'unknown-model';
+  const maxRetries = options?.maxRetries ?? AI_MAX_RETRIES;
+  const timeoutMs = options?.timeoutMs ?? AI_REQUEST_TIMEOUT_MS;
   let lastError: Error | undefined;
 
-  for (let attempt = 0; attempt <= AI_MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (options?.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+
     if (attempt > 0) {
       const delay = AI_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
-      console.info(`[ai-retry] ${provider} attempt ${attempt + 1}/${AI_MAX_RETRIES + 1} after ${delay}ms`);
+      console.info(`[ai-retry] ${provider} attempt ${attempt + 1}/${maxRetries + 1} after ${delay}ms`);
       await new Promise(r => setTimeout(r, delay));
     }
 
@@ -394,7 +404,7 @@ async function requestWithRetry(
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify(body),
-      });
+      }, timeoutMs, options?.signal);
 
       const payload = await response.json().catch(() => ({}));
       const elapsedMs = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startMs);
@@ -427,7 +437,7 @@ async function requestWithRetry(
         console.warn('[ai-latency] request failed', { provider, path, model, elapsedMs, attempt: attempt + 1, error: error?.message });
       }
       lastError = error;
-      if (!isRetryableError(error) || attempt >= AI_MAX_RETRIES) {
+      if (error?.name === 'AbortError' || !isRetryableError(error) || attempt >= maxRetries) {
         throw error;
       }
     }
@@ -435,18 +445,20 @@ async function requestWithRetry(
   throw lastError || new Error('Request failed after retries');
 }
 
-async function requestQwen(path: string, body: any) {
-  return requestWithRetry('qwen', DASHSCOPE_BASE_URL, dashscopeApiKey, path, body);
+type RequestOptions = { signal?: AbortSignal; timeoutMs?: number; maxRetries?: number };
+
+async function requestQwen(path: string, body: any, options?: RequestOptions) {
+  return requestWithRetry('qwen', DASHSCOPE_BASE_URL, dashscopeApiKey, path, body, options);
 }
 
-async function requestArk(path: string, body: any) {
-  return requestWithRetry('ark', ARK_BASE_URL, arkApiKey, path, body);
+async function requestArk(path: string, body: any, options?: RequestOptions) {
+  return requestWithRetry('ark', ARK_BASE_URL, arkApiKey, path, body, options);
 }
 
-async function requestChatCompletions(provider: Provider, body: any) {
+async function requestChatCompletions(provider: Provider, body: any, options?: RequestOptions) {
   return provider === 'ark'
-    ? requestArk('/chat/completions', body)
-    : requestQwen('/chat/completions', body);
+    ? requestArk('/chat/completions', body, options)
+    : requestQwen('/chat/completions', body, options);
 }
 
 function resolveRoute(image: boolean): { provider: Provider; model: string } | undefined {
@@ -768,9 +780,13 @@ All values per 100g/100ml, 1 decimal place.`;
   }
 }
 
+const AI_ESTIMATE_TIMEOUT_MS = 10_000;
+const AI_ESTIMATE_MAX_RETRIES = 0;
+
 export async function estimateNutritionByAI(
   foodName: string,
-  language: 'en' | 'zh'
+  language: 'en' | 'zh',
+  signal?: AbortSignal,
 ): Promise<{ kcal: number; protein: number; fat: number; carbs: number; fiber: number } | null> {
   const route = resolveRoute(false);
   if (!route) return null;
@@ -789,9 +805,9 @@ All values 1 decimal place. No explanation.`;
     const payload = await requestChatCompletions(route.provider, {
       model: route.model,
       temperature: 0,
-      max_tokens: 256,
+      max_tokens: 100,
       messages: [{ role: 'system', content: prompt }],
-    });
+    }, { signal, timeoutMs: AI_ESTIMATE_TIMEOUT_MS, maxRetries: AI_ESTIMATE_MAX_RETRIES });
 
     const text = extractTextFromQwenResponse(payload);
     const result = parseJsonCandidate(text);
@@ -806,7 +822,8 @@ All values 1 decimal place. No explanation.`;
       });
       return result;
     }
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.name === 'AbortError') throw error;
     console.warn('estimateNutritionByAI failed', error);
   }
   return null;
