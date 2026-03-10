@@ -979,7 +979,7 @@ export default function Chat() {
       const prompt = language === 'zh'
         ? '帮我生成一份饮食计划'
         : 'Help me create a meal plan';
-      handleSend(prompt);
+      handleSend(prompt, true);
       return;
     }
 
