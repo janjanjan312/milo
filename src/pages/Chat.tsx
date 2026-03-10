@@ -1617,11 +1617,6 @@ export default function Chat() {
                   contentEditable
                   role="textbox"
                   inputMode="text"
-                  onFocus={() => {
-                    setTimeout(() => {
-                      editableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }, 300);
-                  }}
                   onInput={() => {
                     const text = editableRef.current?.textContent || '';
                     setInput(text);

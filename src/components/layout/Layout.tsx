@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect, useRef } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { MessageSquare, ClipboardList, User } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -6,36 +6,19 @@ import { translations } from '../../translations';
 
 function useKeyboardVisible() {
   const [visible, setVisible] = useState(false);
-  const showTimer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
-    const isEditable = (el: EventTarget | null): boolean => {
-      if (!el || !(el instanceof HTMLElement)) return false;
-      if (el.isContentEditable) return true;
-      const tag = el.tagName;
-      return tag === 'TEXTAREA' || (tag === 'INPUT' && !['checkbox', 'radio', 'submit', 'button', 'file', 'hidden', 'range'].includes((el as HTMLInputElement).type));
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const THRESHOLD = 150;
+    const onResize = () => {
+      const kbHeight = window.innerHeight - vv.height;
+      setVisible(kbHeight > THRESHOLD);
     };
 
-    const onFocusIn = (e: FocusEvent) => {
-      if (isEditable(e.target)) {
-        clearTimeout(showTimer.current);
-        showTimer.current = setTimeout(() => setVisible(true), 150);
-      }
-    };
-    const onFocusOut = () => {
-      clearTimeout(showTimer.current);
-      setTimeout(() => {
-        if (!isEditable(document.activeElement)) setVisible(false);
-      }, 50);
-    };
-
-    document.addEventListener('focusin', onFocusIn);
-    document.addEventListener('focusout', onFocusOut);
-    return () => {
-      clearTimeout(showTimer.current);
-      document.removeEventListener('focusin', onFocusIn);
-      document.removeEventListener('focusout', onFocusOut);
-    };
+    vv.addEventListener('resize', onResize);
+    return () => vv.removeEventListener('resize', onResize);
   }, []);
 
   return visible;
