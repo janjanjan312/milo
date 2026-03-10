@@ -444,7 +444,7 @@ export default function Chat() {
     } else {
       scrollToBottom();
     }
-  }, [messages, isListening, selectedImages, interimInput]);
+  }, [messages, isLoading, isListening, selectedImages, interimInput]);
 
   useEffect(() => {
     const el = editableRef.current;
