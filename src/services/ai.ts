@@ -793,10 +793,12 @@ export async function estimateNutritionByAI(
 
   const prompt = language === 'zh'
     ? `你是营养学专家。请估算"${foodName}"每100克（或100毫升）的平均营养成分。
+重要：这是日常饮食记录场景，除非名称明确含有"干""脱水""生"等字样，否则一律按新鲜或常见烹饪后的状态估算（如青豆=鲜青豆，玉米粒=鲜玉米粒，鸡胸肉=熟鸡胸肉）。
 对于混合食物请推理典型成分比例后计算加权平均。
 严格只输出一个 JSON 对象：{"kcal":0,"protein":0,"fat":0,"carbs":0,"fiber":0}
 所有数值保留1位小数。不要任何解释。`
     : `You are a nutrition expert. Estimate per-100g (or per-100ml) average nutrition for "${foodName}".
+Important: This is for daily meal logging. Unless the name explicitly says "dried", "raw", or "dehydrated", always estimate for the fresh or commonly cooked form (e.g. green peas = fresh, corn kernels = fresh, chicken breast = cooked).
 For mixed foods, reason about typical components and compute weighted averages.
 Output strict JSON only: {"kcal":0,"protein":0,"fat":0,"carbs":0,"fiber":0}
 All values 1 decimal place. No explanation.`;

@@ -190,6 +190,9 @@ export function searchFoodWithScore(query: string, limit = 5): ScoredFoodItem[] 
         score -= 30;
       }
     }
+    if (/[（(][^）)]*干[^）)]*[）)]/.test(item.foodName) && !query.includes('干')) {
+      score -= 35;
+    }
 
     if (score > 30) {
       scored.push({ item, score });
