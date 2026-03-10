@@ -1382,7 +1382,7 @@ export default function Chat() {
       : ['Generate optimized plan', 'Log meals by photo/text', 'Daily/weekly record analysis', 'Log water'];
 
   return (
-    <div className="flex flex-col h-full bg-stone-50 relative">
+    <div className="flex flex-col h-full bg-stone-100 relative">
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 z-20 bg-white/95 backdrop-blur-sm border-b border-stone-100" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="flex items-center justify-between px-4 h-12">

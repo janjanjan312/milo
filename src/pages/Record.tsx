@@ -521,9 +521,9 @@ export default function Record() {
                           isSelected
                             ? "bg-stone-900 text-white"
                             : isToday
-                              ? "bg-stone-200 text-stone-900 font-semibold"
+                              ? "bg-indigo-200 text-indigo-900 font-semibold"
                               : hasRecord
-                                ? "bg-stone-100 text-stone-900 font-medium"
+                                ? "bg-indigo-50 text-indigo-900 font-medium"
                                 : "text-stone-400 hover:bg-stone-50"
                         )}
                       >
