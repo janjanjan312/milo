@@ -767,21 +767,27 @@ export default function Chat() {
           const carbs = parseMetric(/(?:碳水|carbs?)\s*(\d+)\s*[-~至到]?\s*(\d+)?\s*g/i);
           const fat = parseMetric(/(?:脂肪|fat)\s*(\d+)\s*[-~至到]?\s*(\d+)?\s*g/i);
 
-          resolvedMealLog = {
-            mealType: toMealType(undefined),
-            items: [
-              {
-                category: 'Carb',
-                name: language === 'zh' ? '拍照识别餐食' : 'Photo-recognized meal',
-                serving: 1,
-                unit: language === 'zh' ? '份' : 'serving',
-                protein,
-                carbs,
-                fat,
-                calories,
-              },
-            ],
-          };
+          if (calories > 0 || protein > 0 || carbs > 0 || fat > 0) {
+            resolvedMealLog = {
+              mealType: toMealType(undefined),
+              items: [
+                {
+                  category: 'Carb',
+                  name: language === 'zh' ? '拍照识别餐食' : 'Photo-recognized meal',
+                  serving: 1,
+                  unit: language === 'zh' ? '份' : 'serving',
+                  protein,
+                  carbs,
+                  fat,
+                  calories,
+                },
+              ],
+            };
+          } else {
+            finalAiText = language === 'zh'
+              ? '抱歉，我无法从照片中识别出具体食物。请告诉我你吃了什么，可以打字或语音输入，例如"一碗米饭、一份鸡胸肉、一盘青菜"。'
+              : "Sorry, I couldn't identify the food from this photo. Please tell me what you ate — you can type or use voice input, e.g. \"a bowl of rice, grilled chicken breast, and a plate of greens\".";
+          }
         }
 
         finalAiText = buildRecordPreviewText(
