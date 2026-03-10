@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp, MealItem, PlanFoodItem, FoodCategory } from '../context/AppContext';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
@@ -45,6 +45,12 @@ export default function Record() {
   const normalizeDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const isSameDay = (a: Date, b: Date) => normalizeDay(a) === normalizeDay(b);
   const filteredLogs = dailyLogs.filter(log => isSameDay(new Date(log.timestamp), selectedDate));
+
+  const datesWithRecords = useMemo(() => {
+    const s = new Set<number>();
+    dailyLogs.forEach(log => s.add(normalizeDay(new Date(log.timestamp))));
+    return s;
+  }, [dailyLogs]);
 
   const getSelectedDateTimestamp = () => {
     const d = new Date(selectedDate);
@@ -502,6 +508,7 @@ export default function Record() {
                     const d = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), day);
                     const isSelected = isSameDay(d, selectedDate);
                     const isToday = isSameDay(d, today);
+                    const hasRecord = datesWithRecords.has(normalizeDay(d));
                     return (
                       <button
                         key={day}
@@ -514,8 +521,10 @@ export default function Record() {
                           isSelected
                             ? "bg-stone-900 text-white"
                             : isToday
-                              ? "bg-stone-100 text-stone-900"
-                              : "text-stone-700 hover:bg-stone-100"
+                              ? "bg-stone-200 text-stone-900 font-semibold"
+                              : hasRecord
+                                ? "bg-stone-100 text-stone-900 font-medium"
+                                : "text-stone-400 hover:bg-stone-50"
                         )}
                       >
                         {day}
