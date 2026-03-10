@@ -247,6 +247,27 @@ Stage: Record Analysis (daily/weekly).${logsBlock}
 - Do NOT use bold titles or ask the user to choose.`;
   }
 
+  const coachingLogs = userContext?.dailyLogs as any[] | undefined;
+  let coachingLogsBlock = '';
+  if (coachingLogs && coachingLogs.length > 0) {
+    const byDate = new Map<string, string[]>();
+    for (const item of coachingLogs) {
+      const date = item.timestamp
+        ? new Date(item.timestamp).toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric', weekday: 'short' })
+        : 'unknown';
+      if (!byDate.has(date)) byDate.set(date, []);
+      byDate.get(date)!.push(
+        `  [${item.type}] ${item.name} ${item.serving || ''}${item.unit || ''} — ${item.calories || 0}kcal P:${item.protein || 0}g C:${item.carbs || 0}g F:${item.fat || 0}g`
+      );
+    }
+    const lines: string[] = [];
+    for (const [date, entries] of byDate) {
+      lines.push(`${date}:`);
+      lines.push(...entries);
+    }
+    coachingLogsBlock = `\n\nRecent meal logs (from the app's food record):\n${lines.join('\n')}\n`;
+  }
+
   return `${baseInfo}\n${machineFormats}
 Tone & style:
 - You're a nutritionist friend — professional but approachable, like chatting with a friend who studied nutrition.
@@ -254,8 +275,15 @@ Tone & style:
 - Keep each reply focused — no filler, no repeating what the user said.
 - NEVER include parenthetical meta-commentary or reveal your internal process. No progress updates, no phase labels, no invented features.
 - Prefer natural, minimally processed, easy-to-buy foods. No cooking instructions unless asked.
+${coachingLogsBlock}${coachingLogsBlock ? `**When meal log data is available (as shown above):**
+The user already has recent meal records. Unless they explicitly ask to start fresh (e.g. "重新聊聊饮食习惯", "let's start over", "从头开始"), you should skip Phase 1 and use the log data directly:
+1. Briefly analyze their recent eating patterns — what's good, what's missing, any imbalances (2-3 sentences, conversational).
+2. Directly provide a concrete one-day meal recommendation addressing the gaps you noticed.
+3. Output the recommendation as a Phase 3 JSON plan block so the app can parse it. Target ~${targets.targetCalories} kcal (±10%).
+4. After the plan, append: :::suggestions:::${language === 'zh' ? '保存计划|我想调整' : 'Save plan|I want changes'}:::
 
-Your coaching process has 3 phases. Phases MUST proceed in order: 1 → 2 → 3. You MUST NOT skip any phase.
+Only fall back to the full 3-phase flow below if the user explicitly wants to re-discuss their habits from scratch.
+` : ''}Your coaching process has 3 phases. Phases MUST proceed in order: 1 → 2 → 3. You MUST NOT skip any phase.
 
 **Phase 1: Information Collection**
 Collect ALL 8 items below, one at a time in order. For each item, you need BOTH the content AND the timing/frequency. If the user only provides one aspect (e.g. only timing but not what they eat, or only food but not timing), follow up to get the missing info before moving on.

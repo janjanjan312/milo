@@ -16,6 +16,14 @@ import { getRandomPlanColor } from '../data/mealPlans';
 import { translations } from '../translations';
 
 
+function getRecentDailyLogs(logs: MealItem[] | undefined, days?: number): MealItem[] | undefined {
+  if (!logs || logs.length === 0) return logs;
+  if (!days) return logs;
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const filtered = logs.filter(l => (l.timestamp || 0) >= cutoff);
+  return filtered.length > 0 ? filtered : undefined;
+}
+
 export default function Chat() {
   const { user, mealPlan: currentMealPlan, setMealPlan, addLogs, clearLogs, saveMealPlan, chatMessages: messages, setChatMessages: setMessages, allPlans, dailyLogs, setSavedAdvice, language, addWater, todayWaterTotal } = useApp();
   const t = translations[language];
@@ -546,7 +554,9 @@ export default function Chat() {
           language,
           interactionScene,
           shouldAutoRecord: shouldAttemptRecord,
-          dailyLogs: interactionScene === 'record_analysis' ? dailyLogs : undefined,
+          dailyLogs: (interactionScene === 'record_analysis' || interactionScene === 'diet_coaching')
+            ? getRecentDailyLogs(dailyLogs, interactionScene === 'diet_coaching' ? 3 : undefined)
+            : undefined,
           todayWaterTotal,
         },
         currentImages.length > 0 ? currentImages : undefined
@@ -966,15 +976,10 @@ export default function Chat() {
       forcedSceneRef.current = 'diet_coaching';
       startedModeRef.current = 'diet_coaching';
       setShowQuickModeButtons(false);
-      const quickReply =
-        language === 'zh'
-          ? '好，我们先从作息开始：你通常几点起床，早餐大概几点吃？'
-          : 'Great, let us start with your routine. To build a practical plan, what time do you usually wake up, and when do you usually have breakfast?';
-      setMessages(prev => [
-        ...prev,
-        { role: 'user', text: suggestion },
-        { role: 'model', text: quickReply },
-      ]);
+      const prompt = language === 'zh'
+        ? '帮我生成一份饮食计划'
+        : 'Help me create a meal plan';
+      handleSend(prompt);
       return;
     }
 

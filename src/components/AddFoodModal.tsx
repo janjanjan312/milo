@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, ChangeEvent, FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Camera, Upload, Loader2 } from 'lucide-react';
+import { X, Camera, Loader2 } from 'lucide-react';
 import { useApp, MealItem, FoodCategory } from '../context/AppContext';
 import { v4 as uuidv4 } from 'uuid';
 import { translations } from '../translations';
@@ -23,7 +23,6 @@ export default function AddFoodModal({ isOpen, onClose, mealType, initialData, d
   const [mode, setMode] = useState<'manual' | 'camera'>('manual');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-  const uploadInputRef = useRef<HTMLInputElement>(null);
   const [selectedMealType, setSelectedMealType] = useState<MealItem['type']>(mealType);
 
   useEffect(() => {
@@ -263,46 +262,6 @@ export default function AddFoodModal({ isOpen, onClose, mealType, initialData, d
                 ))}
               </div>
 
-              {/* Action Tabs - Only show if no data yet */}
-              {(!name && !amount) && (
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => cameraInputRef.current?.click()}
-                    className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-stone-200 hover:border-stone-900 hover:bg-stone-50 transition-all group bg-stone-50"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <Camera size={20} className="text-stone-900" />
-                    </div>
-                    <span className="text-sm font-bold text-stone-900">{t.addFood.camera}</span>
-                    <input 
-                      type="file" 
-                      ref={cameraInputRef} 
-                      className="hidden" 
-                      accept="image/*"
-                      capture="environment"
-                      onChange={handleFileUpload}
-                    />
-                  </button>
-
-                  <button
-                    onClick={() => uploadInputRef.current?.click()}
-                    className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-stone-200 hover:border-stone-900 hover:bg-stone-50 transition-all group bg-stone-50"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <Upload size={20} className="text-stone-900" />
-                    </div>
-                    <span className="text-sm font-bold text-stone-900">{t.addFood.upload}</span>
-                    <input 
-                      type="file" 
-                      ref={uploadInputRef} 
-                      className="hidden" 
-                      accept="image/*"
-                      onChange={handleFileUpload}
-                    />
-                  </button>
-                </div>
-              )}
-
               {/* Analysis Loading State */}
               {isAnalyzing && (
                 <div className="py-8 flex flex-col items-center justify-center text-center space-y-3">
@@ -316,14 +275,31 @@ export default function AddFoodModal({ isOpen, onClose, mealType, initialData, d
                 <form onSubmit={handleSubmit} className="space-y-6 pt-2">
                   <div>
                     <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-1.5">{t.addFood.name}</label>
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={e => setName(e.target.value)}
-                      placeholder={language === 'en' ? "e.g. Grilled Chicken Salad" : "例如：烤鸡肉沙拉"}
-                      className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-900 transition-all"
-                      required
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        placeholder={language === 'en' ? "e.g. Grilled Chicken Salad" : "例如：烤鸡肉沙拉"}
+                        className="w-full p-3 pr-10 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-900 transition-all"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-stone-300 hover:text-stone-600 transition-colors"
+                      >
+                        <Camera size={18} />
+                        <input
+                          type="file"
+                          ref={cameraInputRef}
+                          className="hidden"
+                          accept="image/*"
+                          multiple
+                          onChange={handleFileUpload}
+                        />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
