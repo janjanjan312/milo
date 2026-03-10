@@ -845,12 +845,13 @@ export default function Chat() {
           'Not saved yet. Say "log this meal" once more and I will do it right away.',
         ];
         const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)] || arr[0];
+        const noMealLogResolved = !resolvedMealLog || !Array.isArray(resolvedMealLog.items) || resolvedMealLog.items.length === 0;
         const completionText = hasRecordedMeal
           ? (language === 'zh' ? pick(successPhrasesZh) : pick(successPhrasesEn))
-          : (language === 'zh' ? pick(failPhrasesZh) : pick(failPhrasesEn));
-        const mergedText = finalAiText.trim()
-          ? `${finalAiText}\n\n${completionText}`
-          : completionText;
+          : noMealLogResolved
+            ? ''
+            : (language === 'zh' ? pick(failPhrasesZh) : pick(failPhrasesEn));
+        const mergedText = [finalAiText.trim(), completionText].filter(Boolean).join('\n\n');
 
         setMessages(prev => [
           ...prev,
