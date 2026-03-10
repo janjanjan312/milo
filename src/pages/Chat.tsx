@@ -785,8 +785,8 @@ export default function Chat() {
             };
           } else {
             finalAiText = language === 'zh'
-              ? '抱歉，我无法从照片中识别出具体食物。请告诉我你吃了什么，可以打字或语音输入，例如"一碗米饭、一份鸡胸肉、一盘青菜"。'
-              : "Sorry, I couldn't identify the food from this photo. Please tell me what you ate — you can type or use voice input, e.g. \"a bowl of rice, grilled chicken breast, and a plate of greens\".";
+              ? '这张照片我没能看清是什么食物 😅 你可以直接告诉我吃了什么，打字或者语音都行～\n比如："一碗米饭、一份鸡胸肉、一盘青菜"'
+              : "I couldn't quite make out the food in this photo 😅 Just tell me what you had — typing or voice both work!\nFor example: \"a bowl of rice, grilled chicken, and some greens\"";
           }
         }
 
