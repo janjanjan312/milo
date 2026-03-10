@@ -364,10 +364,9 @@ export function estimateNutritionFromDB(name: string, serving: number, unit = 'g
   }
 
   const per100gCal = servingG > 0 ? (result.calories / servingG) * 100 : result.calories;
-  const per100gFiber = servingG > 0 ? (result.dietaryFiber / servingG) * 100 : result.dietaryFiber;
 
   let category: 'Prot' | 'Veg' | 'Carb' | 'Fat' = 'Carb';
-  if (per100gCal < 50 && per100gFiber > 1) {
+  if (per100gCal < 50) {
     category = 'Veg';
   } else if (result.protein >= result.carbs && result.protein >= result.fat) {
     category = 'Prot';

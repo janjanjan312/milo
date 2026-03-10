@@ -161,9 +161,13 @@ export default function AddFoodModal({ isOpen, onClose, mealType, initialData, d
     if (aiEstimate) {
       const factor = amt / 100;
       let category: FoodCategory = 'Carb';
-      if (aiEstimate.protein >= aiEstimate.carbs && aiEstimate.protein >= aiEstimate.fat) category = 'Prot';
-      else if (aiEstimate.fat >= aiEstimate.protein && aiEstimate.fat >= aiEstimate.carbs) category = 'Fat';
-      if (aiEstimate.kcal < 50 && aiEstimate.fiber > 1) category = 'Veg';
+      if (aiEstimate.kcal < 50) {
+        category = 'Veg';
+      } else if (aiEstimate.protein >= aiEstimate.carbs && aiEstimate.protein >= aiEstimate.fat) {
+        category = 'Prot';
+      } else if (aiEstimate.fat >= aiEstimate.protein && aiEstimate.fat >= aiEstimate.carbs) {
+        category = 'Fat';
+      }
 
       return {
         calories: Math.round(aiEstimate.kcal * factor),
