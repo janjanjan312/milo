@@ -447,6 +447,20 @@ export default function Chat() {
   }, [messages, isLoading, isListening, selectedImages, interimInput]);
 
   useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => {
+      if (editableRef.current && editableRef.current.contains(document.activeElement)) {
+        requestAnimationFrame(() => {
+          editableRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'nearest' });
+        });
+      }
+    };
+    vv.addEventListener('resize', onResize);
+    return () => vv.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
     const el = editableRef.current;
     if (!el) return;
     const display = input + interimInput;
