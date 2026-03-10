@@ -19,7 +19,7 @@ function useKeyboardVisible() {
     const onFocusIn = (e: FocusEvent) => {
       if (isEditable(e.target)) {
         clearTimeout(showTimer.current);
-        showTimer.current = setTimeout(() => setVisible(true), 350);
+        showTimer.current = setTimeout(() => setVisible(true), 150);
       }
     };
     const onFocusOut = () => {
