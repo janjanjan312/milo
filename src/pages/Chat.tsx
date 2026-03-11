@@ -51,6 +51,7 @@ export default function Chat() {
   const editableRef = useRef<HTMLDivElement>(null);
   const forcedSceneRef = useRef<InteractionScene | null>(null);
   const startedModeRef = useRef<InteractionScene | null>(null);
+  const forceRecordNextRef = useRef(false);
   const showQuickModeAfterReplyRef = useRef(false);
   const [showQuickModeButtons, setShowQuickModeButtons] = useState(false);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
@@ -549,8 +550,11 @@ export default function Chat() {
       }
       const hasMealContext = hasConcreteMealContext(combinedText, currentImage);
       const imageAutoRecord = Boolean(currentImage) && interactionScene === 'meal_estimate';
-      let shouldAttemptRecord = (!forcedScene || forcedScene === 'meal_estimate')
-        && (imageAutoRecord || forcedScene === 'meal_estimate' || hasExplicitRecordIntent || (hasReportedMealIntake && hasMealContext));
+      const forceRecord = forceRecordNextRef.current;
+      forceRecordNextRef.current = false;
+      let shouldAttemptRecord = forceRecord
+        || ((!forcedScene || forcedScene === 'meal_estimate')
+          && (imageAutoRecord || forcedScene === 'meal_estimate' || hasExplicitRecordIntent || (hasReportedMealIntake && hasMealContext)));
 
       const mainReplyStartMs = getNowMs();
       const { text, mealPlan, correctedUserText, suggestions, mealLog } = await sendMessageToAI(
@@ -1064,6 +1068,18 @@ export default function Chat() {
       setShowQuickModeButtons(false);
       handleSend(
         language === 'zh' ? '把这餐保存到饮食日志' : 'Save this meal to my food log',
+        true
+      );
+      return;
+    }
+
+    const isQuickLogAction =
+      /^(记入|记录|记下来|log it|add it|save it)$/i.test(normalized);
+    if (isQuickLogAction) {
+      forceRecordNextRef.current = true;
+      setShowQuickModeButtons(false);
+      handleSend(
+        language === 'zh' ? '记入饮食日志' : 'Log this to food record',
         true
       );
       return;
