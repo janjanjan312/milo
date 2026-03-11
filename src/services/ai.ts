@@ -321,7 +321,8 @@ ${todaySummary}
 **Mode B — General coaching with log data (user wants overall advice or a full-day plan):**
 1. Briefly analyze their recent eating patterns — what's good, what's missing, any imbalances (2-3 sentences, conversational).
 2. Directly provide a concrete one-day meal recommendation addressing the gaps you noticed.
-3. Output the recommendation as a Phase 3 JSON plan block so the app can parse it. Target ~${targets.targetCalories} kcal (±10%).
+3. Output the recommendation as a Phase 3 JSON plan block so the app can parse it.
+   **CRITICAL: The plan MUST total ~${targets.targetCalories} kcal (±10%). This is the user's calculated daily target — do NOT deviate. Sum all items' calories and verify before outputting.**
 4. After the plan, append: :::suggestions:::${language === 'zh' ? '保存计划|我想调整' : 'Save plan|I want changes'}:::
 
 Only fall back to the full 3-phase flow below if the user explicitly wants to re-discuss their habits from scratch.
@@ -359,8 +360,8 @@ ONLY after Phase 2 is complete AND the user agrees to generate a plan:
 - Provide a concrete one-day plan (Breakfast/Lunch/Dinner/Snack) with specific foods and portions.
 - ALWAYS output ALL four meal sections in a single reply. NEVER split across multiple replies.
 - If user requests adjustments (e.g. change calories, swap foods), regenerate the COMPLETE plan with all four meals, not just the modified part.
-- Target ~${targets.targetCalories} kcal (±10%). If user explicitly requests a different calorie target, use their target instead.
-- IMPORTANT: The sum of all items' calories in the JSON MUST approximately equal the total you state in your text. Double-check before outputting.
+- **CRITICAL: Target ~${targets.targetCalories} kcal (±10%). This is the user's calculated daily target. Sum all items' calories and verify the total is within ${Math.round(targets.targetCalories * 0.9)}–${Math.round(targets.targetCalories * 1.1)} kcal before outputting.** If user explicitly requests a different calorie target, use their target instead.
+- The sum of all items' calories in the JSON MUST approximately equal the total you state in your text.
 - Include a JSON block for app parsing:
 \`\`\`json
 {
@@ -759,6 +760,16 @@ export async function sendMessageToAI(
         mealPlan.lunch = scale(mealPlan.lunch);
         mealPlan.dinner = scale(mealPlan.dinner);
         mealPlan.snack = scale(mealPlan.snack);
+
+        const newTotal = Math.round(targets.targetCalories);
+        responseText = responseText.replace(
+          /(?:总热量|总计|合计|热量).{0,6}?约?\s*(\d{3,5})\s*(?:大卡|千卡|kcal|卡)/gi,
+          (match, oldNum) => match.replace(oldNum, String(newTotal))
+        );
+        responseText = responseText.replace(
+          /(?:total|about|approximately)\s*~?\s*(\d{3,5})\s*kcal/gi,
+          (match, oldNum) => match.replace(oldNum, String(newTotal))
+        );
       }
     }
     
