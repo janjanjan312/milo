@@ -138,7 +138,10 @@ ensureFoodDatabaseLoaded();
 function getDatabase(): FoodNutritionItem[] {
   const main = _database || [];
   if (_customDatabase.length === 0) return main;
-  return [..._customDatabase, ...main];
+  const mainNames = new Set(main.map(f => normalize(f.cleanName)));
+  const filtered = _customDatabase.filter(f => !mainNames.has(normalize(f.cleanName)));
+  if (filtered.length === 0) return main;
+  return [...filtered, ...main];
 }
 
 // ---------------------------------------------------------------------------
