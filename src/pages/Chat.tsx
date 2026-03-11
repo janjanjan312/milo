@@ -84,8 +84,10 @@ export default function Chat() {
   };
 
   const scrollToBottom = (instant = false) => {
-    messagesEndRef.current?.scrollIntoView({ 
-      behavior: instant ? "auto" : "smooth" 
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({
+        behavior: instant ? "auto" : "smooth"
+      });
     });
   };
 
