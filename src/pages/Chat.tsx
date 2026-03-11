@@ -85,15 +85,11 @@ export default function Chat() {
     }
   };
 
-  const scrollToBottom = (instant = false) => {
+  const scrollToBottom = () => {
     requestAnimationFrame(() => {
       const container = messagesContainerRef.current;
       if (container) {
-        if (instant) {
-          container.scrollTop = container.scrollHeight;
-        } else {
-          container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-        }
+        container.scrollTop = container.scrollHeight;
       }
     });
   };
@@ -448,7 +444,7 @@ export default function Chat() {
 
   useEffect(() => {
     if (isFirstRender.current) {
-      scrollToBottom(true);
+      scrollToBottom();
       isFirstRender.current = false;
     } else {
       scrollToBottom();
