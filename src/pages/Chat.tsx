@@ -61,6 +61,7 @@ export default function Chat() {
   const pendingImagesRef = useRef<string[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isFirstRender = useRef(true);
 
   // Cleanup ASR on unmount to release microphone
@@ -85,9 +86,14 @@ export default function Chat() {
 
   const scrollToBottom = (instant = false) => {
     requestAnimationFrame(() => {
-      messagesEndRef.current?.scrollIntoView({
-        behavior: instant ? "auto" : "smooth"
-      });
+      const container = messagesContainerRef.current;
+      if (container) {
+        if (instant) {
+          container.scrollTop = container.scrollHeight;
+        } else {
+          container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+        }
+      }
     });
   };
 
@@ -1447,7 +1453,7 @@ export default function Chat() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 pt-14 space-y-4" onClick={() => { setShowHeaderMenu(false); }}>
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 pt-14 space-y-4" onClick={() => { setShowHeaderMenu(false); }}>
         {messages.map((msg, idx) => (
           <div key={idx} className="flex flex-col">
             <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
