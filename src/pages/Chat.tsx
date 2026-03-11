@@ -89,13 +89,13 @@ export default function Chat() {
     requestAnimationFrame(() => {
       const container = messagesContainerRef.current;
       if (container) {
-        container.scrollTop = container.scrollHeight;
+        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
       }
     });
     setTimeout(() => {
       const container = messagesContainerRef.current;
       if (container) {
-        container.scrollTop = container.scrollHeight;
+        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
       }
     }, 400);
   };
