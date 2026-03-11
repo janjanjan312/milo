@@ -60,7 +60,7 @@ function toNumber(value: any, fallback: number) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function computeNutritionTargets(userContext: any) {
+export function computeNutritionTargets(userContext: any) {
   const weight = Math.max(35, toNumber(userContext?.weight, 65)); // kg
   const height = Math.max(140, toNumber(userContext?.height, 170)); // cm
   const age = Math.max(16, toNumber(userContext?.age, 25));
@@ -209,6 +209,7 @@ Gut-health dietary principles (apply when recommending foods):
 - Meal log (ONLY when user reports eating, NEVER in meal plans): :::meal_log:::{"mealType":"breakfast|lunch|dinner|snack","items":[{"category":"Prot|Veg|Carb|Fat","name":"","serving":0,"unit":"g","protein":0,"carbs":0,"fat":0,"calories":0}]}:::
   - mealType: infer from user context (e.g. "早餐吃了…"→breakfast, "午饭…"→lunch, "晚上吃的…"→dinner, "下午茶"→snack). If unclear, omit the field.
   - Include ALL foods, do not skip any item.
+  - Serving size must be edible portion only (exclude peel, shell, bone, inedible parts). Use conservative, realistic single-serving estimates. Do NOT overestimate.
 - Choice buttons (major decisions only, exactly 2 options, at very end): :::suggestions:::Option A|Option B:::
 `;
 
@@ -220,7 +221,8 @@ Identify all foods in the image/description. For each item, give name, estimated
 Keep it brief — use a short list, no lengthy paragraphs. End with a one-line total estimate.${refBlock}
 ${shouldAutoRecord ? `MANDATORY: Append this JSON block at the very end (required for saving):
 :::meal_log:::{"mealType":"breakfast|lunch|dinner|snack","items":[{"category":"Prot|Veg|Carb|Fat|Drink|Fruit","name":"食物名","serving":100,"unit":"g","protein":0,"carbs":0,"fat":0,"calories":0}]}:::
-Include EVERY food item. Do NOT skip any. Infer mealType from context (e.g. "早餐"→breakfast, "午饭"→lunch, "晚餐"→dinner, "下午茶/宵夜"→snack). If unclear, omit mealType.` : ''}
+Include EVERY food item. Do NOT skip any. Infer mealType from context (e.g. "早餐"→breakfast, "午饭"→lunch, "晚餐"→dinner, "下午茶/宵夜"→snack). If unclear, omit mealType.
+Serving sizes must be edible portion only (no peel/shell/bone). Use conservative, realistic estimates.` : ''}
 ${asksAdjustment ? 'User asks for adjustment: give brief tips.' : 'No unsolicited tips.'}`;
   }
 
@@ -275,15 +277,57 @@ Tone & style:
 - Keep each reply focused — no filler, no repeating what the user said.
 - NEVER include parenthetical meta-commentary or reveal your internal process. No progress updates, no phase labels, no invented features.
 - Prefer natural, minimally processed, easy-to-buy foods. No cooking instructions unless asked.
-${coachingLogsBlock}${coachingLogsBlock ? `**When meal log data is available (as shown above):**
-The user already has recent meal records. Unless they explicitly ask to start fresh (e.g. "重新聊聊饮食习惯", "let's start over", "从头开始"), you should skip Phase 1 and use the log data directly:
+${coachingLogsBlock}${coachingLogsBlock ? (() => {
+  const todayLogs = (coachingLogs || []).filter((l: any) => {
+    if (!l.timestamp) return false;
+    const d = new Date(l.timestamp);
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  });
+  const eaten = todayLogs.reduce((a: any, l: any) => ({
+    calories: a.calories + (l.calories || 0),
+    protein: a.protein + (l.protein || 0),
+    carbs: a.carbs + (l.carbs || 0),
+    fat: a.fat + (l.fat || 0),
+  }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  const remaining = {
+    calories: targets.targetCalories - eaten.calories,
+    protein: targets.macros.proteinG - eaten.protein,
+    carbs: targets.macros.carbsG - eaten.carbs,
+    fat: targets.macros.fatG - eaten.fat,
+  };
+  const todaySummary = todayLogs.length > 0
+    ? `\nToday's intake so far: ${Math.round(eaten.calories)} kcal, P${Math.round(eaten.protein)}g, C${Math.round(eaten.carbs)}g, F${Math.round(eaten.fat)}g` +
+      `\nRemaining budget: ~${Math.round(remaining.calories)} kcal, P${Math.round(remaining.protein)}g, C${Math.round(remaining.carbs)}g, F${Math.round(remaining.fat)}g`
+    : '';
+  return `**When meal log data is available (as shown above):**
+The user already has recent meal records. Unless they explicitly ask to start fresh (e.g. "重新聊聊饮食习惯", "let's start over", "从头开始"), you should skip Phase 1 and use the log data directly.
+${todaySummary}
+
+**Mode A — Single meal recommendation (user asks for a specific meal, e.g. "推荐晚餐", "晚上吃什么", "帮我搭配午餐"):**
+1. Briefly note what they've already eaten today and the remaining calorie/macro budget (1-2 sentences).
+2. Recommend 3-5 food items for ONLY the requested meal, fitting within the remaining budget. Be specific with food names and portions.
+3. Output a JSON plan block. ONLY fill the requested meal's key (e.g. "dinner"), set all other keys to empty arrays [].
+\`\`\`json
+{
+  "title": "${language === 'zh' ? '晚餐推荐' : 'Dinner Recommendation'}",
+  "description": "short summary",
+  "breakfast": [], "lunch": [], "dinner": [{"category":"Prot|Veg|Carb|Fat|Drink|Fruit","name":"","serving":0,"unit":"g|ml","protein":0,"carbs":0,"fat":0,"calories":0}], "snack": [],
+  "isOptimized": true
+}
+\`\`\`
+4. After the plan, append: :::suggestions:::${language === 'zh' ? '记录到今天|我想调整' : 'Log to today|I want changes'}:::
+
+**Mode B — General coaching with log data (user wants overall advice or a full-day plan):**
 1. Briefly analyze their recent eating patterns — what's good, what's missing, any imbalances (2-3 sentences, conversational).
 2. Directly provide a concrete one-day meal recommendation addressing the gaps you noticed.
 3. Output the recommendation as a Phase 3 JSON plan block so the app can parse it. Target ~${targets.targetCalories} kcal (±10%).
 4. After the plan, append: :::suggestions:::${language === 'zh' ? '保存计划|我想调整' : 'Save plan|I want changes'}:::
 
 Only fall back to the full 3-phase flow below if the user explicitly wants to re-discuss their habits from scratch.
-` : ''}Your coaching process has 3 phases. Phases MUST proceed in order: 1 → 2 → 3. You MUST NOT skip any phase.
+`;
+})()
+ : ''}Your coaching process has 3 phases. Phases MUST proceed in order: 1 → 2 → 3. You MUST NOT skip any phase.
 
 **Phase 1: Information Collection**
 Collect ALL 8 items below, one at a time in order. For each item, you need BOTH the content AND the timing/frequency. If the user only provides one aspect (e.g. only timing but not what they eat, or only food but not timing), follow up to get the missing info before moving on.
@@ -554,8 +598,8 @@ export async function detectInteractionIntent(params: {
 {"scene":"meal_estimate|diet_coaching|record_analysis","recordIntent":true|false}
 判定规则（中文优先语义，不靠关键词）：
 - meal_estimate: 单餐/单个食物识别、营养估算、吃了什么。
-- diet_coaching: 饮食教练连续流程（信息收集→分析→计划生成）。
-- record_analysis: 对每日/每周已有饮食记录做阶段性回顾分析。
+- diet_coaching: 饮食教练连续流程（信息收集→分析→计划生成）；也包括基于已有饮食记录推荐某一餐（如"推荐晚餐"、"晚上吃什么好"、"帮我搭配午餐"）。
+- record_analysis: 仅限对已有饮食记录的回顾分析（如"今天吃得怎么样"、"帮我看看营养够不够"），不包括推荐具体餐食。
 - recordIntent=true: 用户希望记录进食。这是饮食记录App，以下都视为recordIntent=true：说了吃了/喝了(如喝了酸奶)；只说食物名(如酸奶、鸡蛋、苹果)等同于报告进食；食物+份量(如酸奶150克)；要求记录(如记一下)。
 输入上下文：
 user="${userText}"
@@ -566,8 +610,8 @@ Output strict JSON only:
 {"scene":"meal_estimate|diet_coaching|record_analysis","recordIntent":true|false}
 Rules:
 - meal_estimate: single meal/food estimate.
-- diet_coaching: coaching flow (collect -> analyze -> plan generation).
-- record_analysis: periodic analysis for existing daily/weekly records.
+- diet_coaching: coaching flow (collect -> analyze -> plan generation); also includes recommending a specific meal based on existing records (e.g. "recommend dinner", "what should I eat tonight").
+- record_analysis: only for reviewing/analyzing existing records (e.g. "how did I eat today"), NOT for recommending specific meals.
 - recordIntent=true: user wants intake logged. This is a food tracking app, so ALL imply recordIntent=true: eating phrases (ate yogurt); bare food names (yogurt, eggs, apple) = reporting intake; food+quantity (yogurt 150g); record requests (log this).
 Context:
 user="${userText}"
@@ -894,6 +938,7 @@ export async function extractMealLogForRecord(
 - 包含分析中提到的所有食物和饮品，不要遗漏。
 - 包含所有食物，不要遗漏。
 - 数值给出合理估算，必须是数字。
+- serving必须是去皮去壳去骨后的可食部分重量，使用保守合理的单份估算，不要高估。
 - mealType：根据上下文推断（如"早餐"→breakfast，"午饭"→lunch，"晚餐"→dinner，"下午茶/宵夜"→snack）。无法判断时可省略。`
       : `You are a meal-log parser. Extract structured meal log from the assistant's food analysis text.
 Output strict JSON only (no markdown, no explanation):
@@ -902,6 +947,7 @@ Rules:
 - Include ALL foods and drinks mentioned in the analysis.
 - Include ALL foods, do not skip any item.
 - Numeric fields must be numbers with realistic estimates.
+- Serving must be edible portion only (no peel/shell/bone). Use conservative, realistic single-serving estimates. Do NOT overestimate.
 - mealType: infer from context (e.g. "breakfast"→breakfast, "lunch"→lunch, "dinner"→dinner, "afternoon tea/late night"→snack). Omit if unclear.`;
 
   try {

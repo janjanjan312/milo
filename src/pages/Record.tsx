@@ -12,6 +12,7 @@ import SaveMealPlanModal from '../components/SaveMealPlanModal';
 import { PRESET_PLANS, PlanTemplate } from '../data/mealPlans';
 import { translations } from '../translations';
 import { getMobilePortalTarget } from '../utils/portal';
+import { computeNutritionTargets } from '../services/ai';
 
 export default function Record() {
   const { dailyLogs, mealPlan, addLog, removeLog, addLogs, allPlans, exerciseCalories, syncExerciseData, language, user, addWater, todayWaterTotal, waterLogs, removeWater } = useApp();
@@ -68,8 +69,14 @@ export default function Record() {
     calories: acc.calories + log.calories,
   }), { protein: 0, carbs: 0, fat: 0, veggie: 0, calories: 0 });
 
-  // Mock Base Targets
-  const baseTargets = { protein: 82.5, calories: 1100, fat: 36.7, carbs: 109.9, veggie: 300 };
+  const nutritionTargets = useMemo(() => computeNutritionTargets(user), [user]);
+  const baseTargets = {
+    protein: nutritionTargets.macros.proteinG,
+    calories: nutritionTargets.targetCalories,
+    fat: nutritionTargets.macros.fatG,
+    carbs: nutritionTargets.macros.carbsG,
+    veggie: 300,
+  };
   
   // Dynamic Calorie Target: Base + Exercise
   const dynamicCalorieTarget = baseTargets.calories + exerciseCalories;

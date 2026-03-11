@@ -166,10 +166,19 @@ export function searchFoodWithScore(query: string, limit = 5): ScoredFoodItem[] 
 
     if (name === q) {
       score = 100;
+      if (/[（(]/.test(item.foodName)) {
+        score -= 3;
+      }
     } else if (fullName === q) {
       score = 95;
     } else if (name.startsWith(q) || q.startsWith(name)) {
       score = 85 - Math.abs(name.length - q.length) * 2;
+      if (q.startsWith(name) && q.length > name.length) {
+        const coverageRatio = name.length / q.length;
+        if (coverageRatio < 0.75) {
+          score -= Math.round((0.75 - coverageRatio) * 50);
+        }
+      }
       if (q.length <= 2 && name.length > q.length + 2) score -= 30;
       if (q.length <= 2 && name.length > q.length) score -= 25;
     } else if (name.includes(q)) {
@@ -177,6 +186,9 @@ export function searchFoodWithScore(query: string, limit = 5): ScoredFoodItem[] 
       if (q.length <= 2) score -= 20;
     } else if (q.includes(name) && name.length >= 2) {
       score = 65;
+      if (q.endsWith(name)) {
+        score += 15;
+      }
     } else if (fullName.includes(q)) {
       score = 60 - (fullName.length - q.length);
       if (q.length <= 2) score -= 20;

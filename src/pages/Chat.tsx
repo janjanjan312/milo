@@ -1061,6 +1061,33 @@ export default function Chat() {
       return;
     }
 
+    const isLogTodayAction =
+      /(记录到今天|记入今天|添加到今天|log to today|add to today)/i.test(normalized);
+    if (isLogTodayAction && currentMealPlan) {
+      setMessages(prev => [...prev, { role: 'user', text: suggestion }]);
+      const { template } = buildTemplateFromMealPlan(currentMealPlan);
+      const items = template.items;
+      if (items.length > 0) {
+        const newLogs: MealItem[] = items.map(item => ({
+          ...item,
+          id: uuidv4(),
+          timestamp: Date.now(),
+        }));
+        addLogs(newLogs);
+        const itemNames = items.map(i => i.name).join('、');
+        setMessages(prev => [
+          ...prev,
+          {
+            role: 'model',
+            text: language === 'zh'
+              ? `已记录到今天的饮食日志：${itemNames}。去记录页看看吧～`
+              : `Logged to today's food record: ${itemNames}. Check the Record tab!`,
+          },
+        ]);
+      }
+      return;
+    }
+
     if (isSavePlanAction && currentMealPlan) {
       setMessages(prev => [...prev, { role: 'user', text: suggestion }]);
       const { template, planHash } = buildTemplateFromMealPlan(currentMealPlan);
