@@ -1074,7 +1074,7 @@ export default function Chat() {
     }
 
     const isQuickLogAction =
-      /^(记入|记录|记下来|log it|add it|save it)$/i.test(normalized);
+      /^(记入?|记录|记下来|log it|add it|save it)$/i.test(normalized);
     if (isQuickLogAction) {
       forceRecordNextRef.current = true;
       setShowQuickModeButtons(false);
