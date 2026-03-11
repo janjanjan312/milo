@@ -92,6 +92,12 @@ export default function Chat() {
         container.scrollTop = container.scrollHeight;
       }
     });
+    setTimeout(() => {
+      const container = messagesContainerRef.current;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+    }, 400);
   };
 
   const normalizeMessageText = (text: string) => {
