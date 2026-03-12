@@ -290,14 +290,18 @@ ${coachingLogsBlock}${coachingLogsBlock ? (() => {
     carbs: a.carbs + (l.carbs || 0),
     fat: a.fat + (l.fat || 0),
   }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  const exerciseCal = Number(userContext?.exerciseCalories) || 0;
+  const dynamicTarget = targets.targetCalories + exerciseCal;
   const remaining = {
-    calories: targets.targetCalories - eaten.calories,
+    calories: dynamicTarget - eaten.calories,
     protein: targets.macros.proteinG - eaten.protein,
     carbs: targets.macros.carbsG - eaten.carbs,
     fat: targets.macros.fatG - eaten.fat,
   };
   const todaySummary = todayLogs.length > 0
-    ? `\nToday's intake so far: ${Math.round(eaten.calories)} kcal, P${Math.round(eaten.protein)}g, C${Math.round(eaten.carbs)}g, F${Math.round(eaten.fat)}g` +
+    ? `\n**USE THESE PRE-CALCULATED VALUES — do NOT re-compute from raw logs:**` +
+      `\nToday's intake so far: ${Math.round(eaten.calories)} kcal, P${Math.round(eaten.protein)}g, C${Math.round(eaten.carbs)}g, F${Math.round(eaten.fat)}g` +
+      `\nDaily target: ${Math.round(dynamicTarget)} kcal (base ${targets.targetCalories}${exerciseCal > 0 ? ` + ${exerciseCal} exercise` : ''})` +
       `\nRemaining budget: ~${Math.round(remaining.calories)} kcal, P${Math.round(remaining.protein)}g, C${Math.round(remaining.carbs)}g, F${Math.round(remaining.fat)}g`
     : '';
   return `**When meal log data is available (as shown above):**
@@ -741,12 +745,12 @@ export async function sendMessageToAI(
       mealPlan.snack = enrichPlanFoodItems(mealPlan.snack);
 
       const targets = computeNutritionTargets(userContext);
-      const allItems = [
-        ...mealPlan.breakfast, ...mealPlan.lunch,
-        ...mealPlan.dinner, ...mealPlan.snack,
-      ];
+      const mealSlots = [mealPlan.breakfast, mealPlan.lunch, mealPlan.dinner, mealPlan.snack];
+      const filledSlots = mealSlots.filter(s => s.length > 0).length;
+      const isSingleMealPlan = filledSlots === 1;
+      const allItems = mealSlots.flat();
       const totalCal = allItems.reduce((s, i) => s + (i.calories || 0), 0);
-      if (totalCal > 0 && Math.abs(totalCal - targets.targetCalories) / targets.targetCalories > 0.15) {
+      if (!isSingleMealPlan && totalCal > 0 && Math.abs(totalCal - targets.targetCalories) / targets.targetCalories > 0.15) {
         const ratio = targets.targetCalories / totalCal;
         const scale = (items: PlanFoodItem[]) => items.map(item => ({
           ...item,

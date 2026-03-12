@@ -571,6 +571,7 @@ export default function Chat() {
           dailyLogs: (interactionScene === 'record_analysis' || interactionScene === 'diet_coaching')
             ? getRecentDailyLogs(dailyLogs, interactionScene === 'diet_coaching' ? 3 : undefined)
             : undefined,
+          exerciseCalories,
           todayWaterTotal,
         },
         currentImages.length > 0 ? currentImages : undefined
