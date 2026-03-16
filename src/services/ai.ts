@@ -499,7 +499,10 @@ async function requestWithRetry(
       }
 
       if (!response.ok) {
-        const message = payload?.error?.message || payload?.message || `HTTP ${response.status}`;
+        const message =
+          (typeof payload?.error?.message === 'string' && payload.error.message) ||
+          (typeof payload?.message === 'string' && payload.message) ||
+          `HTTP ${response.status}`;
         const err = new Error(message);
         if (response.status >= 500 && attempt < AI_MAX_RETRIES) {
           lastError = err;
@@ -663,6 +666,13 @@ export async function sendMessageToAI(
             ? '当前未配置可用模型 API Key。请先配置 `ARK_API_KEY`（推荐）或 `DASHSCOPE_API_KEY`，然后刷新页面。'
             : 'No available model API key configured. Please set `ARK_API_KEY` (recommended) or `DASHSCOPE_API_KEY`, then refresh.',
       };
+    }
+    if (!route.model?.trim()) {
+      throw new Error(
+        language === 'zh'
+          ? '模型名为空，请配置 VITE_ARK_TEXT_MODEL（文本）或 VITE_QWEN_TEXT_MODEL / VITE_ARK_VISION_MODEL（图文）'
+          : 'Model name is empty. Set VITE_ARK_TEXT_MODEL or VITE_QWEN_TEXT_MODEL / VITE_ARK_VISION_MODEL'
+      );
     }
 
     const systemPrompt = buildSystemPrompt(userContext, language, history, newMessage || '');

@@ -25,7 +25,7 @@ function getRecentDailyLogs(logs: MealItem[] | undefined, days?: number): MealIt
 }
 
 export default function Chat() {
-  const { user, mealPlan: currentMealPlan, setMealPlan, addLogs, clearLogs, saveMealPlan, chatMessages: messages, setChatMessages: setMessages, allPlans, dailyLogs, setSavedAdvice, language, addWater, todayWaterTotal } = useApp();
+  const { user, mealPlan: currentMealPlan, setMealPlan, addLogs, clearLogs, saveMealPlan, chatMessages: messages, setChatMessages: setMessages, allPlans, dailyLogs, setSavedAdvice, language, addWater, todayWaterTotal, exerciseCalories } = useApp();
   const t = translations[language];
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -932,15 +932,25 @@ export default function Chat() {
         hasRecordedMeal,
       });
 
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      console.error('[chat] send error', e);
+      const msg = e?.message || String(e);
+      // 展示可读的 API/网络错误，便于排查
+      const isApiOrNetwork =
+        /timeout|超时|401|403|404|429|500|API|Key|未配置|请.*配置|network|fetch|aborted/i.test(msg);
+      const displayText =
+        language === 'zh'
+          ? isApiOrNetwork && msg
+            ? `处理时出错：${msg}`
+            : '抱歉，处理时出了点问题，请再试一次。'
+          : isApiOrNetwork && msg
+            ? `Something went wrong: ${msg}`
+            : 'Sorry, something went wrong. Please try again.';
       setMessages(prev => [
         ...prev,
         {
           role: 'model',
-          text: language === 'zh'
-            ? '抱歉，处理时出了点问题，请再试一次。'
-            : 'Sorry, something went wrong. Please try again.',
+          text: displayText,
         },
       ]);
       setShowQuickModeButtons(true);
