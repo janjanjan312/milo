@@ -2,6 +2,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
+/// <reference types="vitest/config" />
 import {VitePWA} from 'vite-plugin-pwa';
 import type {Plugin} from 'vite';
 
@@ -193,6 +194,10 @@ export default defineConfig(({mode}) => {
     process.env.VITE_ARK_API_KEY ??
     '';
   return {
+    test: {
+      environment: 'node',
+      include: ['src/**/*.test.ts'],
+    },
     plugins: [
       react(),
       tailwindcss(),

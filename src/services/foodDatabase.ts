@@ -110,24 +110,26 @@ function parseRawEntries(entries: RawFoodEntry[]): FoodNutritionItem[] {
 }
 
 /**
- * Lazily load the merged food database. Resolves immediately if already loaded.
+ * Lazily load the merged food database (Chinese allFoods + USDA English usdaFoods).
+ * Resolves immediately if already loaded.
  * Called automatically on module import; also call from async entry points
  * (sendMessageToAI, etc.) to guarantee data is ready before use.
  */
 export function ensureFoodDatabaseLoaded(): Promise<void> {
   if (_database) return Promise.resolve();
   if (!_loadPromise) {
-    _loadPromise = import('../data/allFoods.json')
-      .then(mod => {
+    _loadPromise = Promise.all([
+      import('../data/allFoods.json').then(mod => {
         const raw: RawFoodEntry[] = (mod as any).default || mod;
-        if (Array.isArray(raw)) {
-          _database = parseRawEntries(raw);
-        }
-      })
-      .catch(err => {
-        console.warn('Failed to load food database', err);
-        _database = [];
-      });
+        return Array.isArray(raw) ? parseRawEntries(raw) : [];
+      }).catch(() => []),
+      import('../data/usdaFoods.json').then(mod => {
+        const raw: RawFoodEntry[] = (mod as any).default || mod;
+        return Array.isArray(raw) ? parseRawEntries(raw) : [];
+      }).catch(() => []),
+    ]).then(([chinese, usda]) => {
+      _database = [...chinese, ...usda];
+    });
   }
   return _loadPromise;
 }
