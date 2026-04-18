@@ -246,6 +246,7 @@ Stage: Record Analysis (daily/weekly).${logsBlock}
 - End with a brief encouraging remark.
 - If log data is empty, casually tell the user to log some meals first.
 - Total response should be moderate length — not a wall of text, but not robotic bullet points either. Aim for ~150 characters in Chinese / ~80 words in English.
+- Do NOT mention or suggest any unimplemented product capabilities such as reminders, alarms, notifications, scheduled plans, or automatic tracking.
 - Do NOT use bold titles or ask the user to choose.`;
   }
 
