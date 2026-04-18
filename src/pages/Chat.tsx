@@ -853,7 +853,6 @@ export default function Chat() {
 
         const successPhrasesZh = [
           '这餐已经记好了，已同步到今天的饮食记录。',
-          '已为你记入今日饮食记录。',
           '记录完成，今天这餐已经存档。',
         ];
         const successPhrasesEn = [
@@ -966,10 +965,10 @@ export default function Chat() {
   const handleSuggestionClick = (suggestion: string) => {
     const normalized = suggestion.trim().toLowerCase();
     const isMealLoggingEntry =
-      /(饮食记录|记录这餐|拍照\/文字记录饮食|拍照记录饮食|文字记录饮食|log meals by photo\/text|log meals|meal log)/i
+      /(记录饮食|饮食记录|记录这餐|拍照\/文字记录饮食|拍照记录饮食|文字记录饮食|log meals by photo\/text|log meals|meal log)/i
         .test(normalized);
     const isPlanGenerationEntry =
-      /(生成计划|生成饮食计划|做饮食计划|优化计划生成|饮食计划生成|generate optimized plan|generate meal plan|optimi[sz]ed plan)/i
+      /(生成计划|生成饮食计划|制定饮食计划|定制饮食计划|做饮食计划|优化计划生成|饮食计划生成|generate optimized plan|generate meal plan|optimi[sz]ed plan)/i
         .test(normalized);
     const isRecordAnalysisEntry =
       /(饮食分析|看记录分析|每日\/每周饮食记录分析|饮食记录分析|记录分析|daily\/weekly record analysis|record analysis|food log analysis)/i
@@ -987,7 +986,7 @@ export default function Chat() {
       setShowQuickModeButtons(false);
       const quickReply =
         language === 'zh'
-          ? '好，你可以直接说这餐吃了什么，或上传图片。'
+          ? '好的，请告诉我这餐吃了什么，可以上传图片。'
           : 'Sure. Tell me what you ate, or upload a meal photo. I will estimate nutrition first, then log it for you.';
       setMessages(prev => [
         ...prev,
@@ -1425,7 +1424,7 @@ export default function Chat() {
 
   const clearChat = () => {
     const suggestions = language === 'zh'
-      ? ['生成计划', '饮食记录', '喝水打卡']
+      ? ['定制饮食计划', '记录饮食', '喝水打卡']
       : ['Generate optimized plan', 'Log meals by photo/text', 'Daily/weekly record analysis'];
     const initialMessage: ChatMessage = { 
       role: 'model', 
@@ -1442,7 +1441,7 @@ export default function Chat() {
 
   const modeEntryButtons =
     language === 'zh'
-      ? ['生成计划', '饮食记录', '喝水打卡', '饮食分析']
+      ? ['定制饮食计划', '记录饮食', '喝水打卡', '饮食分析']
       : ['Generate optimized plan', 'Log meals by photo/text', 'Daily/weekly record analysis', 'Log water'];
 
   return (

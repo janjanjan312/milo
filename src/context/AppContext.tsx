@@ -172,11 +172,11 @@ function getDefaultGreeting(language: 'en' | 'zh', firstTime: boolean): string {
 function getDefaultGreetingSuggestions(language: 'en' | 'zh', firstTime: boolean): string[] {
   if (language === 'zh') {
     return firstTime
-      ? ['生成计划', '饮食记录']
-      : ['生成计划', '饮食记录', '喝水打卡'];
+      ? ['定制饮食计划', '记录饮食', '喝水打卡']
+      : ['定制饮食计划', '记录饮食', '喝水打卡'];
   }
   return firstTime
-    ? ['Generate optimized plan', 'Log meals by photo/text']
+    ? ['Generate optimized plan', 'Log meals by photo/text', 'Log water']
     : ['Generate optimized plan', 'Log meals by photo/text', 'Daily/weekly record analysis'];
 }
 

@@ -1,9 +1,10 @@
-import { ReactNode, useState, useEffect, useRef } from 'react';
+import { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { MessageSquare, ClipboardList, User } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { translations } from '../../translations';
 
+/*
 function useKeyboardVisible() {
   const [visible, setVisible] = useState(false);
   const showTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -40,11 +41,11 @@ function useKeyboardVisible() {
 
   return visible;
 }
+*/
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { language } = useApp();
   const t = translations[language];
-  const keyboardUp = useKeyboardVisible();
 
   return (
     <div className="flex flex-col h-[100dvh] sm:h-full bg-stone-50 text-stone-900 font-sans">
@@ -53,10 +54,8 @@ export default function Layout({ children }: { children: ReactNode }) {
       </main>
 
       <nav
-        className={`bg-white border-t border-stone-200 px-6 flex justify-around items-center z-50 ${
-          keyboardUp ? 'h-0 !p-0 overflow-hidden opacity-0' : 'pt-3'
-        }`}
-        style={{ paddingBottom: keyboardUp ? 0 : 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
+        className="bg-white border-t border-stone-200 px-6 pt-3 flex justify-around items-center z-50"
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
       >
         <NavItem to="/chat" icon={<MessageSquare size={24} />} label={t.nav.chat} />
         <NavItem to="/record" icon={<ClipboardList size={24} />} label={t.nav.record} />

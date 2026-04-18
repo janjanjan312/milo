@@ -106,7 +106,7 @@ export default function MealPlansModal({ isOpen, onClose, initialPlan }: MealPla
                       {language === 'zh' ? '饮食计划待添加' : 'No meal plans yet'}
                     </p>
                     <p className="text-sm text-stone-400 max-w-[220px]">
-                      {language === 'zh' ? '请在对话页面中点击「生成计划」按钮' : 'Tap "Generate Plan" on the chat page to create one'}
+                      {language === 'zh' ? '请在对话页面中点击「定制饮食计划」按钮' : 'Tap "Generate Plan" on the chat page to create one'}
                     </p>
                   </div>
                 )}
