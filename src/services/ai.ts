@@ -18,7 +18,7 @@ const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
 const ARK_BASE_URL = 'https://ark.cn-beijing.volces.com/api/v3';
 const QWEN_TEXT_MODEL = (import.meta as any).env?.VITE_QWEN_TEXT_MODEL || 'qwen3.5-flash';
 const QWEN_VISION_MODEL = (import.meta as any).env?.VITE_QWEN_VISION_MODEL || 'qwen3-vl-flash';
-const ARK_TEXT_MODEL = (import.meta as any).env?.VITE_ARK_TEXT_MODEL || 'deepseek-v3-250324';
+const ARK_TEXT_MODEL = (import.meta as any).env?.VITE_ARK_TEXT_MODEL || 'deepseek-v4-flash-260425';
 const ARK_VISION_MODEL = (import.meta as any).env?.VITE_ARK_VISION_MODEL || '';
 const TEXT_PROVIDER = ((import.meta as any).env?.VITE_TEXT_PROVIDER || 'ark').toLowerCase();
 const VISION_PROVIDER = ((import.meta as any).env?.VITE_VISION_PROVIDER || 'qwen').toLowerCase();
@@ -538,7 +538,7 @@ async function requestArk(path: string, body: any, options?: RequestOptions) {
 
 async function requestChatCompletions(provider: Provider, body: any, options?: RequestOptions) {
   return provider === 'ark'
-    ? requestArk('/chat/completions', body, options)
+    ? requestArk('/chat/completions', { ...body, thinking: { type: 'disabled' } }, options)
     : requestQwen('/chat/completions', body, options);
 }
 
